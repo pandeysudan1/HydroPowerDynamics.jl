@@ -34,9 +34,74 @@ $$
 
 ---
 
+# Case: a Norwegian hydropower producer wants to take Trollheim toward FCR prequalification
+
+Consider a producer operating a Trollheim-like Francis unit in Norway. The unit already produces energy reliably, but the producer now wants to know whether some of its flexibility can be sold as FCR through the Statnett/Nordic reserve framework.
+
+The operator does **not** want to begin by choosing an arbitrary reserve value and repeatedly testing the plant until something passes. That approach costs plant time, creates unnecessary wear, and gives little insight into why a test succeeds or fails. Instead, the operator wants a model-based engineering process that starts from measurements already available at the plant, identifies what is trustworthy, estimates a sensible reserve candidate, and tells the engineer what should be changed before a formal test is attempted.
+
+The first question from the plant manager is therefore not
+
+> “Can we qualify 15 MW?”
+
+but
+
+> “What does the plant data already tell us, and what FCR volume is technically worth taking forward to a Statnett-facing test?”
+
+That question defines Objective 1 and Objective 2. The model must first demonstrate that it reproduces the plant. Only then is it allowed to produce an FCR screening number.
+
+The second question appears when the screening value is lower than the commercial target:
+
+> “What is actually limiting the reserve — the governor, the servo, the waterway, the turbine, or simply the operating point?”
+
+That is Objective 3. Instead of treating a failed or low FCR result as the end of the analysis, the model identifies the binding mechanism and evaluates candidate engineering actions before the producer spends money on hardware changes or retuning.
+
+The third question is organizational. A producer may operate several plants with different turbine technologies, while Statnett is interested in the external reserve service rather than whether the machine is Francis, Pelton or Kaplan. Objective 4 therefore asks whether one validation workflow can be reused while changing the internal turbine and actuator physics.
+
+The final question is operational:
+
+> “If the model is trusted today, how do we know it is still trustworthy next week when head, operating point or plant condition has changed?”
+
+That is Objective 5. The same measurements used for validation are turned into a rolling model-health signal. A reserve estimate is treated as usable only when the model continues to agree with the plant.
+
+The complete producer story is therefore:
+
+```text
+plant owner wants FCR revenue
+        |
+        v
+use existing measurements before disturbing the plant
+        |
+        v
+validate the physical model block by block
+        |
+        v
+estimate a conservative reserve candidate
+        |
+        v
+identify why the candidate is limited
+        |
+        v
+choose the most valuable engineering / operating action
+        |
+        v
+repeat the method for the relevant turbine technology
+        |
+        v
+monitor whether the model remains valid in operation
+        |
+        v
+prepare the justified candidate, evidence and plant setup
+for the applicable Nordic / Statnett prequalification process
+```
+
+This is the practical role of FREKI in this repository: **reduce uncertainty before the plant test, make the physical reason for the reserve limit visible, and maintain confidence in the model after the test.**
+
+---
+
 ## The engineering problem
 
-Suppose a Trollheim-like hydropower unit is operating close to full load and the owner wants to offer FCR to Statnett. The immediate commercial question is simple — *how many MW can we offer?* — but a credible answer requires several engineering questions to be solved in sequence.
+The Trollheim-like unit is operating close to full load and the owner wants to offer FCR to Statnett. The immediate commercial question is simple — *how many MW can we offer?* — but a credible answer requires several engineering questions to be solved in sequence.
 
 First, the model must reproduce the plant. Second, uncertainty in the model must be carried into the reserve estimate. Third, the limiting plant mechanism must be identified. Fourth, the same methodology should work for other turbine technologies. Finally, if the model is used online, its validity must be checked continuously so that an FCR number is not trusted when the model has drifted away from the plant.
 
@@ -150,6 +215,8 @@ FCR READINESS          MORE DATA REQUIRED
 
 For Statnett-facing engineering this matters directly. Before using the model to reduce or replace plant testing, each model block that materially affects the FCR response must have enough evidence behind it. A locally accurate turbine map alone is not yet evidence that the complete frequency-control chain is validated.
 
+**Producer decision after Objective 1:** do not choose the plant-test reserve volume yet. The local turbine conversion is trustworthy enough to continue, but additional uncertainty must still be carried for hydraulic and governor dynamics.
+
 ![Held-out flow validation](plots/01b_03_heldout_flow.png)
 
 ![Held-out power validation](plots/01b_04_heldout_power.png)
@@ -211,6 +278,8 @@ MODEL-BASED ROBUST SCREENING  9.75 MW
 FORMAL QUALIFIED CAPACITY     NOT ESTABLISHED
 ```
 
+**Producer decision after Objective 2:** if a plant test were being planned now, 9.75 MW is the conservative model-based value worth investigating first. It is a test-planning number, not yet a market qualification statement.
+
 The next step toward a formal claim would be to validate the still-AMBER hydraulic/governor blocks and then expose the resulting model to the applicable Nordic/Statnett FCR test sequence and physical plant test.
 
 ![Capacity by uncertainty scenario](plots/02_01_capacity_by_scenario.png)
@@ -266,6 +335,8 @@ In other words, the engineering question becomes an operational bidding question
 
 The 16.7 MW value is still a screening result. A producer should not offer it to Statnett solely from this model. The model says which intervention is worth investigating and which reserve volume is worth taking forward to the proper verification/test process.
 
+**Producer decision after Objective 3:** before buying a faster servo or changing governor tuning, investigate the operating-point strategy first. The model says that available upward gate travel is currently more valuable than faster control hardware.
+
 ![Intervention ranking](plots/03_01_intervention_ranking.png)
 
 ![Capacity gain](plots/03_02_capacity_gain.png)
@@ -302,6 +373,8 @@ estimate_fcr(validated_model, requirements)
 ```
 
 Trollheim/Francis is the measurement-anchored case. Pelton and Kaplan are currently canonical benchmark implementations for methodology comparison; they are **not** presented as measurement-validated plants. That distinction is important if this framework is used with Statnett or a producer: synthetic turbine-type comparisons demonstrate portability of the method, while a qualification argument requires plant-specific evidence.
+
+**Producer decision after Objective 4:** keep one external qualification workflow, but require turbine-specific evidence internally. A Pelton or Kaplan unit should enter the same decision chain, yet it must not inherit Trollheim/Francis validation evidence.
 
 Objective 4 implementation: `objective_04_multiturbine_validation.jl`.
 
@@ -368,11 +441,49 @@ This is not yet a live SCADA connection. It is an **offline replay of real Troll
 
 For a Statnett-connected operational workflow, the value of this monitor is not that it automatically changes a formally qualified FCR volume. Its value is that it can warn the operator when the model underpinning an operational reserve estimate is no longer trustworthy, and can trigger revalidation, retuning or a new plant test before the unit is relied upon for reserve delivery.
 
+**Producer decision after Objective 5:** do not treat model validity as permanent. If the monitor becomes AMBER or RED, the operator should stop relying on the model-based screening signal until the reason for the mismatch is understood.
+
 ![Rolling residuals](plots/05_02_rolling_residuals.png)
 
 ![Model health](plots/05_03_model_health.png)
 
 ![Online screening capacity](plots/05_04_online_fcr_capacity.png)
+
+---
+
+# From FREKI analysis to a Statnett-facing plant-test package
+
+The output of this repository is not a qualification certificate. It is the engineering package that should make the formal test more focused and defensible.
+
+Before a Statnett-facing prequalification activity, the producer should be able to carry forward a package containing:
+
+```text
+1. plant operating point and relevant measurements
+2. validated model blocks and explicit AMBER / RED gaps
+3. candidate FCR volume selected from robust screening
+4. predicted gate, flow, power and frequency response
+5. identified limiting mechanism and plant constraints
+6. parameter and uncertainty assumptions
+7. applicable Nordic / Statnett test sequence to be executed
+8. measured plant-test result versus model prediction
+9. residual / model-health assessment after the test
+10. final documentation supporting the formal process
+```
+
+The model therefore sits **before, beside and after** the physical test:
+
+```text
+BEFORE TEST
+measurements -> model validation -> choose sensible candidate MW
+
+DURING TEST
+model prediction <-> measured frequency / power / actuator response
+
+AFTER TEST
+residual analysis -> accepted model region -> operational monitoring
+```
+
+This is more valuable than using simulation only as a one-off prequalification plot. It creates continuity between plant engineering, test preparation, reserve-market operation and later model maintenance.
 
 ---
 
@@ -415,8 +526,8 @@ The five studies now solve one connected problem rather than five independent ex
       +--> trusted screening only when model health is acceptable
       |
       v
-6. Take the justified candidate to the applicable Nordic / Statnett
-   prequalification and physical plant-test process.
+6. Take the justified candidate, model evidence and plant configuration
+   to the applicable Nordic / Statnett prequalification and physical test.
 ```
 
 The intended role of `HydroPowerDynamics.jl` is therefore not to replace Statnett testing. It is to make the work before, during and after testing more efficient: decide what model is trustworthy, select a sensible candidate FCR volume, identify the plant mechanism that limits it, choose the most valuable engineering action, and monitor whether the model remains valid afterwards.
