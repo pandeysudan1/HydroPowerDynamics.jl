@@ -1,0 +1,67 @@
+name: FREKI Objective 1B measurement validation
+
+on:
+  push:
+    branches: [AGC_Trollheim]
+    paths:
+      - 'quick_examples/freki_objectives/objective_01b_trollheim_measurement_validation.jl'
+      - 'quick_examples/trollheim_experimental/01_preprocessing/trollheim_processed.csv'
+      - '.github/workflows/freki-objective-01b.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  JULIA_PKG_PRECOMPILE_AUTO: '0'
+  JULIA_NUM_PRECOMPILE_TASKS: '2'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+
+      - uses: julia-actions/cache@v2
+
+      - name: Instantiate environment
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate(; allow_autoprecomp=false)'
+
+      - name: Run Trollheim measurement validation
+        shell: bash
+        run: |
+          set -o pipefail
+          julia --project=. quick_examples/freki_objectives/objective_01b_trollheim_measurement_validation.jl | tee freki_objective_01b.log
+
+      - name: Verify outputs
+        run: |
+          test -f quick_examples/freki_objectives/results/objective_01b_summary.csv
+          test -f quick_examples/freki_objectives/results/objective_01b_validation_timeseries.csv
+          test -f quick_examples/freki_objectives/plots/01b_03_heldout_flow.png
+          test -f quick_examples/freki_objectives/plots/01b_04_heldout_power.png
+          test -f quick_examples/freki_objectives/plots/01b_07_model_health.png
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: freki-objective-01b-results
+          path: |
+            freki_objective_01b.log
+            quick_examples/freki_objectives/results/objective_01b_*.csv
+            quick_examples/freki_objectives/plots/01b_*.png
+
+      - name: Commit generated plots and summaries
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add quick_examples/freki_objectives/results/objective_01b_*.csv
+          git add quick_examples/freki_objectives/plots/01b_*.png
+          if ! git diff --cached --quiet; then
+            git commit -m "Update FREKI Objective 1B measurement results"
+            git push
+          fi
