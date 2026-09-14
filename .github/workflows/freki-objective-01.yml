@@ -1,0 +1,59 @@
+name: FREKI Objective 1 validation
+
+on:
+  push:
+    branches: [AGC_Trollheim]
+    paths:
+      - 'src/**'
+      - 'Project.toml'
+      - 'Manifest.toml'
+      - 'quick_examples/freki_objectives/README.md'
+      - 'quick_examples/freki_objectives/objective_01_model_validation.jl'
+      - '.github/workflows/freki-objective-01.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JULIA_PKG_PRECOMPILE_AUTO: '0'
+      JULIA_NUM_PRECOMPILE_TASKS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate without full precompile
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate(; allow_autoprecomp=false)'
+      - name: Run FREKI Objective 1
+        shell: bash
+        run: |
+          set -o pipefail
+          julia --project=. quick_examples/freki_objectives/objective_01_model_validation.jl | tee freki_objective_01.log
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: freki-objective-01-results
+          path: |
+            freki_objective_01.log
+            quick_examples/freki_objectives/results/*.csv
+            quick_examples/freki_objectives/plots/*.png
+      - name: Commit generated plots and summaries
+        if: success() && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add quick_examples/freki_objectives/plots quick_examples/freki_objectives/results
+          if git diff --cached --quiet; then
+            echo 'No generated changes to commit.'
+          else
+            git commit -m 'Update FREKI objective 1 generated results'
+            git push
+          fi
