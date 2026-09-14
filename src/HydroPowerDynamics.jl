@@ -11,15 +11,8 @@ Physical domains covered
 Component families
   • Hydraulic  : Reservoir, Penstock, SurgeTank, DraftTube, GuideVane
   • Turbine    : FrancisTurbineAffinity, PeltonTurbine
-  • Mechanical : RotorInertia, SimpleGenerator
+  • Mechanical : RotorInertia, SimpleGenerator, VariableLoadGenerator
   • Governor   : PIDGovernor, GGOV1Governor, SimpleGovernorAGC
-
-Quick-start
------------
-```julia
-using HydroPowerDynamics, ModelingToolkit, OrdinaryDiffEq
-# See test/ for worked examples
-```
 """
 module HydroPowerDynamics
 
@@ -43,7 +36,7 @@ include("agc.jl")
 export HydraulicPort, RotationalPort, SignalInPort, SignalOutPort
 export Reservoir, Penstock, SurgeTank, DraftTube, GuideVane
 export FrancisTurbineAffinity, PeltonTurbine
-export RotorInertia, SimpleGenerator, RotationalSpeedSensor, MechanicalPowerSensor
+export RotorInertia, SimpleGenerator, VariableLoadGenerator, RotationalSpeedSensor, MechanicalPowerSensor
 export PIDGovernor, GGOV1Governor, SimpleGovernorAGC
 export gross_head, net_head, darcy_head_loss, power_cascade, joukowsky_pressure, wave_speed
 export critical_closure_time, unit_speed, unit_discharge, plant_efficiency, hydraulic_efficiency
