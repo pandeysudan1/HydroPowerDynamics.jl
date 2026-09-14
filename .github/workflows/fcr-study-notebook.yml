@@ -43,7 +43,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install jupyter nbconvert jupytext
-          julia -e 'using Pkg; Pkg.activate(temp=true); isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General"); Pkg.add("IJulia"); using IJulia; installkernel("Julia 1.11", "--project=$(pwd())")'
+          julia --project=. -e 'using Pkg; Pkg.add("IJulia"); using IJulia; installkernel("Julia FCR Study", "--project=$(pwd())")'
+          jupyter kernelspec list
 
       - name: Build notebook from Jupytext source
         run: jupytext --to ipynb quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.jl
@@ -57,7 +58,7 @@ jobs:
             --inplace \
             quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.ipynb \
             --ExecutePreprocessor.timeout=1800 \
-            --ExecutePreprocessor.kernel_name='julia-1.11'
+            --ExecutePreprocessor.kernel_name='julia-fcr-study-1.11'
 
       - name: Verify generated study outputs
         run: |
@@ -70,6 +71,7 @@ jobs:
 
       - name: Commit executed notebook and outputs
         run: |
+          git checkout -- Project.toml Manifest.toml || true
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.ipynb
