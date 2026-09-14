@@ -39,7 +39,6 @@ const L_PENSTOCK = 500.0
 const D_PENSTOCK = 4.0
 const ROUGHNESS = 1.5e-5
 const ATANK = π / 4 * 3.4^2
-const ZSURGE0 = 69.97
 const D_RISER = 3.4
 const L_RISER = 87.0
 const E_RISER = 1e-2
@@ -54,6 +53,8 @@ function pipe_guess(L, Dpipe)
 end
 const HRG = pipe_guess(L_HEADRACE, D_HEADRACE)
 const PNG = pipe_guess(L_PENSTOCK, D_PENSTOCK)
+# Steady junction level at the headrace outlet, not an arbitrary elevation datum.
+const ZSURGE0 = H_GROSS - HRG.dpf / (RHO * G)
 const ETA0 = ETA_MAX * (1 - C_ETA * (Q0 / Q_RATED - 1)^2)
 
 function build_trollheim(; with_surge::Bool)
@@ -100,8 +101,6 @@ end
 
 function simulate_case(; with_surge::Bool)
     m = build_trollheim(with_surge=with_surge)
-
-    # Independent dynamic states only. Algebraic quantities go to guesses.
     u0 = Dict(
         m.headrace.dm => DM0,
         m.headrace.p_avg => P_UP,
@@ -193,6 +192,7 @@ end
 println("=== HydroPowerDynamics.jl Trollheim AGC surge comparison ===")
 @printf("Electrical load %.1f -> %.1f MW at t=%.1f s; H=%.2f s; R=%.2f; Ki=%.2f 1/s\n",
     P0/1e6, P1/1e6, TSTEP, H_INERTIA, R_PU, KI)
+@printf("Surge initial level from junction equilibrium: %.6f m\n", ZSURGE0)
 println("Solving WITHOUT surge tank...")
 r0 = extract(simulate_case(with_surge=false))
 println("Solving WITH surge tank...")
