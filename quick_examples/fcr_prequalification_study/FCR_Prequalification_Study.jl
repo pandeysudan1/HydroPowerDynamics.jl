@@ -52,11 +52,9 @@ const RHO = 1000.0
 const G = 9.81
 const P_ATM = 101325.0
 const P_UP = P_ATM + RHO*G*H_GROSS
-
 const Q0 = 22.13749950628151
 const DM0 = RHO*Q0
 const Y0 = 0.5384797177203611
-
 const L_HEADRACE = 500.0
 const D_HEADRACE = 6.0
 const L_PENSTOCK = 500.0
@@ -85,7 +83,6 @@ const Q_MAX_PU = 1.45
 A_hr = π*D_HEADRACE^2/4
 A_ps = π*D_PENSTOCK^2/4
 Tw = L_HEADRACE*Q0/(G*A_hr*H_GROSS) + L_PENSTOCK*Q0/(G*A_ps*H_GROSS)
-
 @printf("Nominal speed = %.4f rad/s\n", W0)
 @printf("Water starting time Tw = %.4f s\n", Tw)
 @printf("Initial gate = %.4f pu; flow = %.4f m3/s\n", Y0, Q0)
@@ -113,12 +110,10 @@ D0 = [0.0]
 Gfcr = ss(A,B,C,D0)
 λ = poles(Gfcr)
 display(DataFrame(real=real.(λ), imag=imag.(λ)))
-
 w = exp10.(range(-3,1,length=800))
 resp = vec(freqresp(Gfcr,w))
 mag_db = 20 .* log10.(abs.(resp))
 phase_deg = rad2deg.(angle.(resp))
-
 p1 = plot(w,mag_db,xscale=:log10,xlabel="ω [rad/s]",ylabel="|ΔP/Δf| [dB]",title="Linear FCR response - magnitude",label="G_FCR")
 savefig(p1,joinpath(plotdir,"01_linear_bode_magnitude.png")); display(p1)
 p2 = plot(w,phase_deg,xscale=:log10,xlabel="ω [rad/s]",ylabel="Phase [deg]",title="Linear FCR response - phase",label="G_FCR")
@@ -137,7 +132,6 @@ times = collect(-2.0:dt:T_END)
 N = length(times)
 df = [tt < 0 ? 0.0 : -DF_FULL_HZ for tt in times]
 kreq = argmin(abs.(times .- T_REQ))
-
 m = Model(Ipopt.Optimizer)
 set_silent(m)
 @variable(m,0 <= PFCR <= PFCR_MAX_MW)
@@ -145,7 +139,6 @@ set_silent(m)
 @variable(m,Q_MIN_PU <= q[1:N] <= Q_MAX_PU)
 @constraint(m,y[1] == Y0)
 @constraint(m,q[1] == 1.0)
-
 for k in 1:N-1
     ycmd = Y0 - (PFCR/P0_MW)*(df[k]/DF_FULL_HZ)
     @constraint(m,y[k+1] == y[k] + dt/TG*(ycmd-y[k]))
@@ -157,7 +150,6 @@ end
 @constraint(m,P0_MW*(q[end]-1) >= 0.98*PFCR)
 @objective(m,Max,PFCR)
 optimize!(m)
-
 PFCR_star = value(PFCR)
 yv = value.(y); qv = value.(q)
 dPv = P0_MW .* (qv .- 1)
@@ -165,11 +157,8 @@ rate = diff(yv)./dt
 @printf("JuMP status = %s\n",string(termination_status(m)))
 @printf("Candidate FCR = %.4f MW\n",PFCR_star)
 @printf("Linear 5 s delivery = %.4f MW (%.1f%%)\n",dPv[kreq],100dPv[kreq]/PFCR_star)
-
-diag = DataFrame(constraint=["upper gate","upper flow","5 s delivery","opening rate"],
- margin=[Y_MAX-maximum(yv),Q_MAX_PU-maximum(qv),dPv[kreq]-ALPHA_REQ*PFCR_star,DY_OPEN-maximum(rate)])
+diag = DataFrame(constraint=["upper gate","upper flow","5 s delivery","opening rate"],margin=[Y_MAX-maximum(yv),Q_MAX_PU-maximum(qv),dPv[kreq]-ALPHA_REQ*PFCR_star,DY_OPEN-maximum(rate)])
 display(diag)
-
 p4 = plot(times,dPv,xlabel="Time [s]",ylabel="ΔP [MW]",title="JuMP optimized linear FCR response",label="linear ΔP")
 plot!(p4,times,fill(PFCR_star,N),linestyle=:dash,label="offered FCR")
 savefig(p4,joinpath(plotdir,"04_jump_linear_response.png")); display(p4)
@@ -209,7 +198,6 @@ R_star = (DF_FULL_HZ/F0_HZ)/(PFCR_star/P0_MW)
         D(phi) ~ speed_in.u
     end
 end
-
 function pipe_guess(L,Dpipe)
     Ap = π*Dpipe^2/4; μ=1e-3
     Re = DM0*Dpipe/(μ*Ap)
@@ -221,7 +209,6 @@ HRG = pipe_guess(L_HEADRACE,D_HEADRACE)
 PNG = pipe_guess(L_PENSTOCK,D_PENSTOCK)
 ETA0 = ETA_MAX*(1-C_ETA*(Q0/Q_RATED-1)^2)
 TAU_SHAFT0 = P0_MW*1e6/W0
-
 function build_nonlinear_fcr(Rdroop)
     @named upper = Reservoir(H=H_GROSS,rho=RHO,g=G,p_atm=P_ATM)
     @named tail = Reservoir(H=0.0,rho=RHO,g=G,p_atm=P_ATM)
@@ -231,27 +218,14 @@ function build_nonlinear_fcr(Rdroop)
     @named governor = SimpleGovernorAGC(R=Rdroop,T_g=TG,K_i=0.0,omega_ref=W0,gate_bias=Y0,gate_min=Y_MIN,gate_max=Y_MAX)
     @named speedbc = PrescribedSpeedBoundary()
     ωtest = W0*(1 + ifelse(t < 0.0,0.0,-DF_FULL_HZ)/F0_HZ)
-    eqs = [
-        connect(upper.port,headrace.port_a),
-        connect(headrace.port_b,penstock.port_a),
-        connect(penstock.port_b,turbine.port_in),
-        connect(turbine.port_out,tail.port),
-        connect(governor.gate_out,turbine.opening),
-        connect(turbine.shaft,speedbc.flange),
-        governor.speed_in.u ~ ωtest,
-        speedbc.speed_in.u ~ ωtest,
-    ]
+    eqs = [connect(upper.port,headrace.port_a),connect(headrace.port_b,penstock.port_a),connect(penstock.port_b,turbine.port_in),connect(turbine.port_out,tail.port),connect(governor.gate_out,turbine.opening),connect(turbine.shaft,speedbc.flange),governor.speed_in.u ~ ωtest,speedbc.speed_in.u ~ ωtest]
     raw = ODESystem(eqs,t;name=:FCRNonlinearHPD,systems=[upper,tail,headrace,penstock,turbine,governor,speedbc])
     sys = structural_simplify(raw)
     (;sys,headrace,penstock,turbine,governor,speedbc)
 end
-
 nl = build_nonlinear_fcr(R_star)
 u0 = Dict(nl.headrace.dm=>DM0,nl.penstock.dm=>DM0,nl.governor.xi=>0.0,nl.governor.gate=>Y0,nl.speedbc.phi=>0.0)
-guesses = Dict(
- nl.headrace.p_avg=>P_UP,nl.headrace.Re=>HRG.Re,nl.headrace.f_D=>HRG.fD,nl.headrace.dp_f=>HRG.dpf,
- nl.penstock.p_avg=>P_UP,nl.penstock.Re=>PNG.Re,nl.penstock.f_D=>PNG.fD,nl.penstock.dp_f=>PNG.dpf,
- nl.turbine.H=>H_GROSS,nl.turbine.Q=>Q0,nl.turbine.eta=>ETA0,nl.turbine.P_mech=>P0_MW*1e6,nl.turbine.dm=>DM0,nl.turbine.tau_shaft=>TAU_SHAFT0)
+guesses = Dict(nl.headrace.p_avg=>P_UP,nl.headrace.Re=>HRG.Re,nl.headrace.f_D=>HRG.fD,nl.headrace.dp_f=>HRG.dpf,nl.penstock.p_avg=>P_UP,nl.penstock.Re=>PNG.Re,nl.penstock.f_D=>PNG.fD,nl.penstock.dp_f=>PNG.dpf,nl.turbine.H=>H_GROSS,nl.turbine.Q=>Q0,nl.turbine.eta=>ETA0,nl.turbine.P_mech=>P0_MW*1e6,nl.turbine.dm=>DM0,nl.turbine.tau_shaft=>TAU_SHAFT0)
 prob = ODEProblem(nl.sys,u0,(-100.0,T_END);guesses=guesses)
 sol = solve(prob,Rodas5P();abstol=1e-8,reltol=1e-8,saveat=0.02,tstops=[0.0])
 @printf("Nonlinear HPD retcode = %s, t_end = %.2f s\n",string(sol.retcode),sol.t[end])
@@ -266,17 +240,13 @@ p0_nl=mean(pm[pre]); dP_nl=pm.-p0_nl
 ireq=post[argmin(abs.(tt[post].-T_REQ))]
 gate_rate_nl=diff(gate_nl)./diff(tt)
 delivery_5=dP_nl[ireq]; delivery_end=dP_nl[last(post)]
-
 pass_delivery=delivery_5 >= ALPHA_REQ*PFCR_star-1e-3
 pass_gate=minimum(gate_nl)>=Y_MIN-1e-6 && maximum(gate_nl)<=Y_MAX+1e-6
 pass_flow=minimum(q_nl)/Q0>=Q_MIN_PU-1e-3 && maximum(q_nl)/Q0<=Q_MAX_PU+1e-3
 pass_rate=maximum(gate_rate_nl)<=DY_OPEN+2e-3 && minimum(gate_rate_nl)>=-DY_CLOSE-2e-3
 status=all((pass_delivery,pass_gate,pass_flow,pass_rate)) ? "PASS" : "REDUCE / RETUNE"
-
-summary=DataFrame(metric=["JuMP candidate [MW]","Nonlinear 5 s delivery [MW]","Nonlinear final delivery [MW]","max gate [pu]","max flow/Q0 [pu]","max gate rate [pu/s]","decision"],
- value=[@sprintf("%.4f",PFCR_star),@sprintf("%.4f",delivery_5),@sprintf("%.4f",delivery_end),@sprintf("%.4f",maximum(gate_nl)),@sprintf("%.4f",maximum(q_nl)/Q0),@sprintf("%.4f",maximum(gate_rate_nl),),status])
+summary=DataFrame(metric=["JuMP candidate [MW]","Nonlinear 5 s delivery [MW]","Nonlinear final delivery [MW]","max gate [pu]","max flow/Q0 [pu]","max gate rate [pu/s]","decision"],value=[@sprintf("%.4f",PFCR_star),@sprintf("%.4f",delivery_5),@sprintf("%.4f",delivery_end),@sprintf("%.4f",maximum(gate_nl)),@sprintf("%.4f",maximum(q_nl)/Q0),@sprintf("%.4f",maximum(gate_rate_nl)),status])
 display(summary)
-
 p6=plot(tt,dP_nl,xlabel="Time [s]",ylabel="ΔP [MW]",title="Nonlinear HPD FCR verification",label="HPD nonlinear ΔP")
 plot!(p6,tt,fill(PFCR_star,length(tt)),linestyle=:dash,label="JuMP offer")
 savefig(p6,joinpath(plotdir,"06_nonlinear_power_verification.png")); display(p6)
@@ -303,7 +273,6 @@ p9=plot(tt,lin_on_nl,linestyle=:dash,label="JuMP reduced model",xlabel="Time [s]
 plot!(p9,tt,dP_nl,label="HPD nonlinear")
 plot!(p9,tt,fill(PFCR_star,length(tt)),linestyle=:dot,label="offered FCR")
 savefig(p9,joinpath(plotdir,"09_linear_vs_nonlinear.png")); display(p9)
-
 record=DataFrame(candidate_MW=[PFCR_star],droop_R_pu=[R_star],linear_delivery_5s_MW=[dPv[kreq]],nonlinear_delivery_5s_MW=[delivery_5],nonlinear_final_delivery_MW=[delivery_end],max_gate_pu=[maximum(gate_nl)],max_flow_pu=[maximum(q_nl)/Q0],max_gate_rate_pus=[maximum(gate_rate_nl)],decision=[status])
 CSV.write(joinpath(resultdir,"fcr_candidate_summary.csv"),record)
 traj=DataFrame(time_s=tt,nonlinear_deltaP_MW=dP_nl,nonlinear_gate_pu=gate_nl,nonlinear_Q_m3s=q_nl,linear_deltaP_MW=lin_on_nl)
