@@ -1,14 +1,12 @@
 # FREKI Objective 1B — Trollheim measurement validation results
 
-This note records the first executed measurement-based validation result for the Trollheim HPP data already available in this repository. It continues `TROLLHEIM_MEASUREMENT_VALIDATION.md` and should be read together with the executable script `objective_01b_trollheim_measurement_validation.jl`.
+This note records the first executed measurement-based validation result for the Trollheim HPP data already available in this repository. It continues `TROLLHEIM_MEASUREMENT_VALIDATION.md` and should be read together with `objective_01b_trollheim_measurement_validation.jl`.
 
-The purpose is not to claim FCR prequalification. The purpose is to decide which parts of the HydroPowerDynamics.jl plant model are already supported by measured plant data, which parts remain weakly identified, and what data should be collected before model-based FCR capability is trusted.
+The purpose is not to claim FCR prequalification. The purpose is to decide which parts of the HydroPowerDynamics.jl model are already supported by measured plant data, which parts remain weakly identified, and what additional measurements are needed before model-based FCR capability is trusted.
 
 ## 1. Executed study
 
-The GitHub Actions workflow completed successfully and executed the full Objective 1B script on the processed one-hour Trollheim measurement record.
-
-The data split was
+The GitHub Actions workflow completed successfully on the processed one-hour Trollheim record.
 
 ```text
 1200–1800 s   calibration
@@ -16,10 +14,10 @@ The data split was
 850–1200 s    independent startup check
 ```
 
-The fitted turbine relation was
+The local Francis relation was
 
 $$
-Q=\tau_o K_qD^2\sqrt{H},
+Q=\tau_oK_qD^2\sqrt{H},
 $$
 
 $$
@@ -30,30 +28,24 @@ $$
 P_e=\eta_g\rho gQH\eta.
 $$
 
-No samples from the held-out validation interval were used to estimate the parameters.
+No held-out samples were used for fitting.
 
 ## 2. Identified parameters
 
 | Parameter | Identified value | Interpretation |
 |---|---:|---|
-| $K_q$ | 0.319751 | physically plausible flow coefficient |
+| $K_q$ | 0.319751 | physically plausible local flow coefficient |
 | $\eta_{max}$ | 0.948071 | consistent with the measured high-load efficiency level |
-| $Q_r$ | 36.4445 m3/s | close to the observed full-load discharge |
+| $Q_r$ | 36.4445 m3/s | close to observed full-load discharge |
 | $c_\eta$ | -1.84392 | **not physically credible as an efficiency-hill curvature** |
 
-The first three quantities are reasonable. The negative $c_\eta$ is the important result.
-
-It does not mean that the measured plant has a negative physical efficiency curvature. It means that the narrow high-load calibration interval does not contain enough off-design excitation to identify the curvature of the efficiency hill reliably. A least-squares fit can still reproduce the local measurements while returning a parameter that should not be used outside that local region.
-
-This is exactly the distinction needed for a FREKI-style model-health tool:
+The negative $c_\eta$ is an identifiability warning. The high-load calibration window contains too little off-design excitation to determine the curvature of the efficiency hill reliably.
 
 ```text
 good output fit != all physical parameters are identified
 ```
 
 ## 3. Held-out validation
-
-The model was then evaluated on the independent 1801–2400 s interval.
 
 | Metric | Result |
 |---|---:|
@@ -64,25 +56,17 @@ The model was then evaluated on the independent 1801–2400 s interval.
 | Flow FIT | 33.91 % |
 | Power FIT | 54.61 % |
 
-The relative RMSE values are very small. Around this operating point the algebraic turbine conversion reproduces measured flow and power closely on data that were not used for fitting.
+The relative RMSE values are very small. Around the measured full-load point, the local turbine map reproduces flow and power closely on data not used for fitting.
 
-The normalized FIT values look much lower than the relative RMSE values because the held-out full-load record itself has only a small dynamic range. When the measured signal changes very little, even a small residual can be large relative to the signal's deviation from its mean. For this window, absolute and relative RMSE are therefore more useful than FIT alone.
+The normalized FIT values are lower because the held-out signals have little variation around their mean. In such a narrow operating window, absolute and relative RMSE are more informative than FIT alone.
 
 ![Held-out flow validation](plots/01b_03_heldout_flow.png)
 
-**Interpretation.** The measured and modelled discharge should nearly overlap. This supports use of the fitted local flow relation around the measured full-load operating point.
-
 ![Held-out power validation](plots/01b_04_heldout_power.png)
-
-**Interpretation.** The sub-0.2 MW RMSE is small compared with approximately 128 MW generation. The local turbine conversion from measured head and gate to power is therefore strong at this operating point.
 
 ![Held-out residuals](plots/01b_05_residuals.png)
 
-**Interpretation.** Residuals should be inspected for bias, drift and correlation with head or gate. A small RMSE with structured residuals would still indicate missing physics.
-
 ## 4. Independent startup check
-
-The same parameters were replayed on the startup interval, which is much farther from the calibration operating point.
 
 | Metric | Result |
 |---|---:|
@@ -91,104 +75,123 @@ The same parameters were replayed on the startup interval, which is much farther
 
 ![Startup power check](plots/01b_06_startup_power.png)
 
-The flow error remains small, while the power error increases substantially compared with the steady-state held-out test. This is useful rather than disappointing: it identifies where the simple local turbine relation stops being sufficient.
+Flow remains reasonably reproduced, while power error increases markedly away from the calibration operating point. This shows where the simple local map stops being sufficient.
 
-Possible contributors include transient hydraulic effects, generator-efficiency assumptions, efficiency variation away from the calibrated full-load region, dynamic gate/turbine behaviour, and measurement timing/alignment. The current experiment does not distinguish these effects yet.
+Possible causes include efficiency variation away from full load, transient hydraulic effects, generator-efficiency assumptions, dynamic actuator/turbine effects and signal timing. The current test does not yet separate these mechanisms.
 
-## 5. Correct model-health interpretation
+## 5. Model-health interpretation
 
-The first script automatically labelled the turbine block `GREEN` because the held-out relative flow and power RMSE were both below 1 %. That is too optimistic if parameter plausibility is also considered.
-
-A stronger engineering decision is:
+The first script labelled the turbine block `GREEN` because held-out relative flow and power errors were below 1 %. That is too optimistic if physical parameter plausibility is also considered.
 
 | Model block | Evidence | Decision |
 |---|---|---|
-| Local turbine flow/power mapping near full load | excellent held-out RMSE | **GREEN locally** |
-| Efficiency-hill curvature $c_\eta$ | negative fitted value; weak excitation | **AMBER** |
-| Hydraulic dynamic model | pressure and flow are measured, but waterway dynamics have not yet been identified/replayed | **AMBER** |
-| Governor model | speed and gate are measured, but controller mode/reference signals are missing | **AMBER / not uniquely identifiable** |
-| FCR capability | complete dynamic chain not yet validated | **MORE DATA REQUIRED** |
-
-Therefore the plant-level Objective 1B status should be interpreted as
+| Local turbine flow/power map near full load | excellent held-out RMSE | **GREEN locally** |
+| Full turbine parameter set | $c_\eta<0$ from weak excitation | **AMBER** |
+| Hydraulic dynamics | waterway states not yet independently validated | **AMBER** |
+| Governor dynamics | controller mode/reference signals are missing | **AMBER / not uniquely identifiable** |
+| FCR capability | complete dynamic chain not validated | **MORE DATA REQUIRED** |
 
 ```text
-LOCAL TURBINE MAP     GREEN
-TURBINE PARAMETER SET AMBER
-HYDRAULIC DYNAMICS    AMBER
-GOVERNOR DYNAMICS     AMBER
-FCR READINESS          MORE DATA REQUIRED
+LOCAL TURBINE MAP      GREEN
+TURBINE PARAMETER SET  AMBER
+HYDRAULIC DYNAMICS     AMBER
+GOVERNOR DYNAMICS      AMBER
+FCR READINESS           MORE DATA REQUIRED
 ```
 
-This is more useful for a control engineer than a single PASS/FAIL label because it tells us exactly what is already trustworthy and what must be improved.
+The important FREKI lesson is that residual quality and parameter identifiability must be reported separately.
 
-## 6. What the measurements already prove
+## 6. Measurement sufficiency: an important hydraulic correction
 
-The Trollheim record supports three practical conclusions.
+The available pressure channels are
 
-First, measured head, guide-vane position, discharge and generator power are sufficient to calibrate a useful local Francis-turbine map around full load.
+- `p_penstock_a_`: turbine inlet / spiral-casing pressure;
+- `p_dt_b_`: turbine outlet / draft-tube pressure.
 
-Second, held-out validation is important. The low validation errors show that the local map is not merely reproducing the calibration samples.
-
-Third, parameter identifiability must be separated from output fit. The negative fitted $c_\eta$ shows that a model may predict the measured outputs well while one parameter remains physically untrustworthy.
-
-That third point is directly relevant to FREKI. An online model-validation system should report both
+Their difference is useful for turbine net head,
 
 $$
-\text{prediction residuals}
+H_t=\frac{p_{in}-p_{out}}{\rho g},
 $$
 
-and
-
-$$
-\text{parameter identifiability / plausibility}.
-$$
-
-## 7. Next implementation
-
-The next experiment should use the measured pressure and discharge signals to identify waterway dynamics rather than fitting another algebraic turbine parameter.
-
-For a penstock segment,
+but these are **not the two end pressures of a penstock segment**. Therefore the current record must not be used to identify a penstock Darcy factor directly from
 
 $$
 \frac{L}{A}\frac{d\dot m}{dt}
 =
-\Delta p
--
-f_D\frac{L}{2D\rho A^2}\dot m|\dot m|.
+\Delta p-f_D\frac{L}{2D\rho A^2}\dot m|\dot m|.
 $$
 
-The Trollheim data already contain $p_{in}(t)$, $p_{out}(t)$ and $Q(t)$. The next script should therefore estimate an effective hydraulic parameter on a dynamic window and then replay the **nonlinear HPD waterway + turbine model** on a held-out startup or shutdown interval.
+Doing so would assign the turbine pressure drop to the penstock model and would be physically incorrect.
 
-A practical sequence is
+This changes the next FREKI task from "fit $f_D$ now" to **measurement sufficiency and hydraulic identifiability**.
+
+## 7. What can be identified with the current Trollheim record?
+
+| Quantity / model block | Current channels sufficient? | Comment |
+|---|---|---|
+| local $K_q$ | **Yes** | $H$, gate and $Q$ are measured |
+| local efficiency level | **Yes** | $P$, $Q$ and $H$ are measured |
+| efficiency curvature $c_\eta$ | **Weak** | full-load window gives too little off-design excitation |
+| turbine net-head response | **Yes** | turbine inlet and outlet pressures are measured |
+| penstock friction $f_D$ | **No** | penstock upstream pressure/head is missing |
+| surge-tank dynamics | **No / incomplete** | surge level/branch-flow measurements are not in this record |
+| governor $R,T_g$ | **Not uniquely** | controller reference/mode signals are missing |
+| complete FCR dynamic model | **No** | required blocks are not all validated |
+
+This table is a useful FREKI output by itself: it tells the engineer which extra sensors or logged control signals provide the highest value before another plant test is planned.
+
+## 8. Next implementation — Objective 1C: measurement sufficiency and dynamic residuals
+
+The next executable study should not invent a penstock parameter. It should use the existing data to quantify what the current measurements can support and what remains structurally unidentifiable.
+
+The proposed next script is
 
 ```text
-measured p_in, p_out, Q
-        |
-        v
-select dynamic window
-        |
-        v
-identify effective f_D / hydraulic parameter
-        |
-        v
-nonlinear HPD waterway replay
-        |
-        v
-held-out pressure + flow residuals
-        |
-        v
-GREEN / AMBER / RED hydraulic model health
+objective_01c_measurement_sufficiency.jl
 ```
 
-Only after the hydraulic block is supported should the study move to unique governor identification. For that step, the preferred additional plant channels are governor frequency reference, power/set-point reference, controller mode, droop/transient-droop settings, and any internal servo command available from the control system.
+with the workflow
 
-## 8. FCR decision logic
+```text
+Trollheim measured channels
+        |
+        v
+classify available physical equations
+        |
+        v
+check excitation of each parameter
+        |
+        v
+compute local sensitivities / condition numbers
+        |
+        v
+rank identifiable vs weak vs unavailable parameters
+        |
+        v
+recommend additional plant signals
+```
 
-The eventual chain should remain conservative:
+A practical output table should look like
+
+| Parameter | Sensitivity | Data support | Action |
+|---|---:|---|---|
+| $K_q$ | high | available | retain |
+| $\eta_{max}$ | high near full load | available | retain |
+| $c_\eta$ | low | weak excitation | collect part-load data |
+| $f_D$ | not observable | missing penstock boundary pressure | add/log upstream pressure/head |
+| surge parameters | not observable | missing surge states | log surge level/branch flow if available |
+| $R,T_g$ | ambiguous | missing governor references/mode | export controller signals |
+
+The recommended additional control channels are governor frequency reference, power/set-point reference, controller mode, droop/transient-droop settings and internal servo command. For waterway identification, at least one appropriate upstream hydraulic boundary measurement is required in addition to turbine-inlet pressure and flow.
+
+## 9. FCR decision logic
 
 ```text
 measured plant data
       -> local turbine validation
+      -> measurement sufficiency / identifiability
+      -> collect missing high-value signals
       -> hydraulic dynamic validation
       -> governor validation
       -> uncertainty region
@@ -197,20 +200,12 @@ measured plant data
       -> Statnett / Nordic prequalification process
 ```
 
-The role of HydroPowerDynamics.jl is to reduce unnecessary plant testing and expose the limiting physics before the formal test. It should not turn a locally fitted model into an automatic claim of qualification.
+The role of HydroPowerDynamics.jl is to reduce unnecessary plant testing and expose missing physics before the formal test. It should not turn a locally fitted model into an automatic claim of qualification.
 
 ## Generated evidence
 
-Numerical summary:
-
-`results/objective_01b_summary.csv`
-
-Held-out trajectory:
-
-`results/objective_01b_validation_timeseries.csv`
-
-Plots:
-
+- `results/objective_01b_summary.csv`
+- `results/objective_01b_validation_timeseries.csv`
 - `plots/01b_01_measurement_windows.png`
 - `plots/01b_02_calibration_flow.png`
 - `plots/01b_03_heldout_flow.png`
