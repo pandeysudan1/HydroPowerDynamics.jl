@@ -1,0 +1,59 @@
+name: FREKI Objective 2 FCR screening
+
+on:
+  push:
+    branches: [AGC_Trollheim]
+    paths:
+      - 'quick_examples/freki_objectives/objective_02_fcr_capacity.jl'
+      - 'quick_examples/freki_objectives/results/objective_01b_summary.csv'
+      - '.github/workflows/freki-objective-02.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: AGC_Trollheim
+          fetch-depth: 0
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+
+      - uses: julia-actions/cache@v2
+
+      - name: Instantiate environment
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run FREKI Objective 2
+        run: julia --project=. quick_examples/freki_objectives/objective_02_fcr_capacity.jl
+
+      - name: Verify outputs
+        run: |
+          test -f quick_examples/freki_objectives/results/objective_02_summary.csv
+          test -f quick_examples/freki_objectives/results/objective_02_scenarios.csv
+          test -f quick_examples/freki_objectives/plots/02_01_capacity_by_scenario.png
+          test -f quick_examples/freki_objectives/plots/02_03_robust_response.png
+          test -f quick_examples/freki_objectives/plots/02_05_model_health_gate.png
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: freki-objective-02-results
+          path: |
+            quick_examples/freki_objectives/results/objective_02_*.csv
+            quick_examples/freki_objectives/plots/02_*.png
+
+      - name: Commit generated outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add quick_examples/freki_objectives/results/objective_02_*.csv
+          git add quick_examples/freki_objectives/plots/02_*.png
+          git diff --cached --quiet || git commit -m "Update FREKI Objective 2 screening results"
+          git push origin HEAD:AGC_Trollheim
