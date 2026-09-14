@@ -1,33 +1,23 @@
 # ============================================================================ #
 # mechanical.jl  –  Rotating mass and generator models
-#
-# Section 4 of the HydroMTK Mathematical Reference.
-#
-# Components
-#   RotorInertia    – lumped J model for turbine + shaft + generator rotor
-#   SimpleGenerator – algebraic torque-speed characteristic (Section 4.3)
 # ============================================================================ #
 
 # ============================================================================ #
-# RotorInertia  (Section 4.1)
+# RotorInertia
 #
-#   J * dω/dt = τ_turbine - τ_generator - τ_friction   (M.1)
-#   dθ/dt     = ω                                       (M.2)
-#   τ_friction = b_v * ω
+# RotationalPort convention: tau > 0 means torque entering a component.
+# Therefore, for the rotor storage element,
+#
+#   J*dω/dt = τ_turbine_node + τ_generator_node - b_v*ω
+#
+# With a turbine driver, its own port has tau < 0 and the rotor-side port gets
+# tau > 0 through the connection equation. With a generator load, its port has
+# tau > 0 and the rotor-side port gets tau < 0.
 # ============================================================================ #
 """
     RotorInertia(; name, J, b_v, omega_0)
 
 Lumped rotating mass (turbine runner + shaft + generator rotor).
-
-**Parameters**
-- `J`       : polar moment of inertia [kg·m²]   (default 5000.0)
-- `b_v`     : viscous damping [N·m·s/rad]        (default 5.0)
-- `omega_0` : initial angular velocity [rad/s]   (default 0.0)
-
-**Ports**
-- `flange_turbine`   : RotationalPort – torque input from turbine
-- `flange_generator` : RotationalPort – torque output to generator
 """
 @mtkmodel RotorInertia begin
     @parameters begin
@@ -40,49 +30,27 @@ Lumped rotating mass (turbine runner + shaft + generator rotor).
         theta(t) = 0.0,  [description = "Angular position [rad]"]
     end
     @components begin
-        flange_turbine   = RotationalPort()   # +τ in  (torque driver)
-        flange_generator = RotationalPort()   # +τ out (load)
+        flange_turbine   = RotationalPort()
+        flange_generator = RotationalPort()
     end
     @equations begin
-        # Both flanges rotate at the same speed
         flange_turbine.omega   ~ omega
         flange_generator.omega ~ omega
         flange_turbine.phi     ~ theta
         flange_generator.phi   ~ theta
-
-        # Eq. M.2 – kinematics
         D(theta) ~ omega
-
-        # Eq. M.1 – angular momentum (friction = b_v * ω)
-        J * D(omega) ~
-            flange_turbine.tau  -           # turbine drives rotor
-            (-flange_generator.tau) -       # generator reacts (flow sign flip)
-            b_v * omega                     # bearing friction
+        J * D(omega) ~ flange_turbine.tau + flange_generator.tau - b_v * omega
     end
 end
 
 # ============================================================================ #
-# SimpleGenerator  (Section 4.3)
-#
-# Algebraic torque-speed characteristic:
-#   τ_gen = (P_rated / ω_rated) * (1 + D_d*(ω - ω_s)/ω_s)   (GA.1)
-#   P_elec = τ_gen * ω * η_gen                                (GA.2)
+# SimpleGenerator
 # ============================================================================ #
 """
     SimpleGenerator(; name, P_rated, omega_rated, omega_s, D_d, eta_gen)
 
-Simplified algebraic generator – suitable for long-term stability and
-control design studies.
-
-**Parameters**
-- `P_rated`      : rated electrical power [W]         (default 50e6)
-- `omega_rated`  : rated angular velocity [rad/s]     (default 157.08 ≈ 1500 rpm)
-- `omega_s`      : synchronous angular velocity [rad/s] (default 157.08)
-- `D_d`          : damping coefficient [-]             (default 1.5)
-- `eta_gen`      : generator efficiency [-]            (default 0.97)
-
-**Port**    : `flange` (RotationalPort – input from rotor)
-**Outputs** : `tau_gen` [N·m],  `P_elec` [W]
+Simplified algebraic generator. `flange.tau` is positive because mechanical
+shaft torque enters the generator/load component.
 """
 @mtkmodel SimpleGenerator begin
     @parameters begin
@@ -93,48 +61,27 @@ control design studies.
         eta_gen     = 0.97,    [description = "Generator efficiency"]
     end
     @variables begin
-        tau_gen(t),   [description = "Generator reaction torque [N·m]"]
-        P_elec(t),    [description = "Electrical output power [W]"]
+        tau_gen(t), [description = "Generator torque magnitude [N·m]"]
+        P_elec(t),  [description = "Electrical output power [W]"]
     end
     @components begin
         flange = RotationalPort()
     end
     @equations begin
-        # Eq. GA.1 – algebraic torque-speed
         tau_gen ~ (P_rated / omega_rated) *
                   (1.0 + D_d * (flange.omega - omega_s) / omega_s)
-
-        # Eq. GA.2 – electrical power
-        P_elec  ~ tau_gen * abs(flange.omega) * eta_gen
-
-        # Convention: generator reaction torque opposes rotation
-        flange.tau ~ -tau_gen
+        P_elec ~ tau_gen * abs(flange.omega) * eta_gen
+        flange.tau ~ tau_gen
     end
 end
 
 # ============================================================================ #
-# RotationalSpeedSensor  (Section 4.4)
-#
-# Ideal non-invasive speed sensor: reads angular velocity from a rotational
-# port and outputs it as a causal signal.  Draws zero torque (ideal probe).
-#
-#   w.u = flange.omega                          (SS.1)
-#   flange.tau = 0                              (SS.2 – zero-power tap)
-#
-# Connection pattern (parallel tap — does not interrupt the mechanical chain):
-#   connect(rotor.flange_generator, speed_sensor.flange, generator.flange)
-#   connect(speed_sensor.w, :y_omega, governor.speed_in)
-#   ↑ the :y_omega tag enables Blocks.get_sensitivity(model, :y_omega)
+# RotationalSpeedSensor
 # ============================================================================ #
 """
     RotationalSpeedSensor(; name)
 
-Ideal rotational speed sensor.  Attaches like a voltmeter — in parallel on any
-`RotationalPort` node.  Outputs ω as a causal `SignalOutPort` (`w`).
-
-**Ports**
-- `flange` : RotationalPort  – tap point  (draws zero torque)
-- `w`      : SignalOutPort   – angular velocity ω [rad/s]
+Ideal non-invasive speed sensor.
 """
 @mtkmodel RotationalSpeedSensor begin
     @components begin
@@ -142,48 +89,19 @@ Ideal rotational speed sensor.  Attaches like a voltmeter — in parallel on any
         w      = SignalOutPort()
     end
     @equations begin
-        # Eq. SS.2 – ideal probe: no torque extracted
         flange.tau ~ 0
-
-        # Eq. SS.1 – read across variable
         w.u ~ flange.omega
     end
 end
 
 # ============================================================================ #
-# MechanicalPowerSensor  (Section 4.5)
-#
-# Ideal in-line power meter.  Inserted between two rotational flanges;
-# passes torque and speed through unchanged (rigid, lossless coupling) while
-# outputting instantaneous shaft power as a causal signal.
-#
-#   flange_b.tau   = -flange_a.tau              (PS.1 – action-reaction)
-#   flange_b.omega = flange_a.omega             (PS.2 – speed continuity)
-#   flange_b.phi   = flange_a.phi               (PS.3 – position continuity)
-#   P.u = -flange_a.tau * flange_a.omega        (PS.4 – instantaneous power, positive when
-#                                                        driving from a→b)
-#
-# Sign convention for P.u:
-#   When the upstream component (e.g. turbine) sets shaft.tau = +τ and connects
-#   to flange_a, Kirchhoff gives flange_a.tau = -τ.  PS.4 negates this, so
-#   P.u = τ * ω > 0 (positive mechanical power flowing from driver to load).
-#
-# Connection pattern (in-line on mechanical shaft):
-#   connect(turbine.shaft,         power_sensor.flange_a)
-#   connect(power_sensor.flange_b, rotor.flange_turbine)
-#   connect(power_sensor.P,        governor.power_in)
+# MechanicalPowerSensor
 # ============================================================================ #
 """
     MechanicalPowerSensor(; name)
 
-Ideal in-line rotational power sensor.  Inserted in series on a mechanical
-shaft.  The `flange_a → flange_b` path is a perfect rigid coupling (zero energy
-storage or loss).
-
-**Ports**
-- `flange_a` : RotationalPort – upstream (driver) side
-- `flange_b` : RotationalPort – downstream (load) side
-- `P`         : SignalOutPort – shaft power [W]  (positive = power flows a→b)
+Ideal in-line rotational power sensor. Positive `P.u` means power flows from
+`flange_a` toward `flange_b`.
 """
 @mtkmodel MechanicalPowerSensor begin
     @components begin
@@ -192,18 +110,11 @@ storage or loss).
         P        = SignalOutPort()
     end
     @equations begin
-        # Eq. PS.1 – rigid torque coupling (action-reaction)
         flange_b.tau ~ -flange_a.tau
-
-        # Eq. PS.2 – speed continuity
         flange_b.omega ~ flange_a.omega
-
-        # Eq. PS.3 – angle continuity
         flange_b.phi ~ flange_a.phi
-
-        # Eq. PS.4 – instantaneous power (positive when power flows from a to b)
-        # Kirchhoff at flange_a node: flange_a.tau = -(upstream tau),
-        # so -flange_a.tau = upstream_tau > 0 when driven.
-        P.u ~ -flange_a.tau * flange_a.omega
+        # Power entering through side a. For a turbine upstream, the sensor-side
+        # torque is positive after the connection equation.
+        P.u ~ flange_a.tau * flange_a.omega
     end
 end
