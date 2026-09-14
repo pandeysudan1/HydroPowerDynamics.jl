@@ -27,8 +27,12 @@ jobs:
       - name: Instantiate without full precompile
         run: julia --project=. -e 'using Pkg; Pkg.instantiate(; allow_autoprecomp=false)'
       - name: Run Trollheim AGC comparison
-        run: julia --project=. quick_examples/trollheim_agc_surgetank_compare/trollheim_agc_surgetank_compare.jl | tee agc_trollheim.log
+        shell: bash
+        run: |
+          set -o pipefail
+          julia --project=. quick_examples/trollheim_agc_surgetank_compare/trollheim_agc_surgetank_compare.jl | tee agc_trollheim.log
       - name: Upload results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: agc-trollheim-results
