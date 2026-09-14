@@ -18,6 +18,7 @@ const W0 = 2π * RPM0 / 60
 const H_GROSS = 371.0
 const RHO = 1000.0
 const G = 9.81
+const P_UP = 101325.0 + RHO * G * H_GROSS
 const Q_RATED = 37.0
 const D_RUNNER = 2.5
 const ETA_MAX = 0.97
@@ -89,7 +90,9 @@ function simulate_case(; with_surge::Bool)
     m = build_trollheim(with_surge=with_surge)
     u0 = Dict(
         m.headrace.dm => DM0,
+        m.headrace.p_avg => P_UP,
         m.penstock.dm => DM0,
+        m.penstock.p_avg => P_UP,
         m.rotor.omega => W0,
         m.rotor.theta => 0.0,
         m.governor.xi => 0.0,
@@ -107,6 +110,16 @@ function simulate_case(; with_surge::Bool)
     # At t=5 s the generator/load equation changes to 90 MW; AGC sees only speed error.
     prob = ODEProblem(m.sys, u0, (-300.0, 65.0); guesses)
     sol = solve(prob, Rodas5P(); tstops=[TSTEP], abstol=1e-8, reltol=1e-8, saveat=0.01)
+
+    t_end = isempty(sol.t) ? -Inf : sol.t[end]
+    @printf("  solver retcode=%s; saved points=%d; t_end=%.6f s\n", string(sol.retcode), length(sol.t), t_end)
+    if !isempty(sol.t)
+        f_end = sol[m.rotor.omega][end] / W0 * F0
+        gate_end = sol[m.governor.tau_o][end]
+        @printf("  terminal diagnostic: f=%.6f Hz; gate=%.6f pu\n", f_end, gate_end)
+    end
+    t_end >= 64.999 || error("Simulation terminated before 65 s (retcode=$(sol.retcode), t_end=$t_end)")
+
     (; m, sol)
 end
 
@@ -120,6 +133,8 @@ function extract(run)
     q = sol[m.turbine.Q]
     pre = findall(tt -> 0 <= tt < TSTEP, tv)
     post = findall(>=(TSTEP), tv)
+    isempty(pre) && error("No saved pre-disturbance samples in [0,5) s")
+    isempty(post) && error("No saved post-disturbance samples at/after 5 s")
     i = post[argmin(f[post])]
     iae = 0.0
     for k in 2:length(tv)
