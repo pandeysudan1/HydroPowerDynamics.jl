@@ -1,0 +1,12 @@
+quantity,value
+stream_samples,3600
+rolling_window_s,60
+green_samples,1474
+amber_samples,74
+red_samples,114
+green_fraction_pct,88.68832731648617
+objective_02_robust_screening_MW,9.75
+median_trusted_screening_MW,9.75
+max_trusted_screening_MW,9.75
+formal_qualification_state,NOT ESTABLISHED
+streaming_mode,OFFLINE REPLAY OF REAL TROLLHEIM MEASUREMENTS
