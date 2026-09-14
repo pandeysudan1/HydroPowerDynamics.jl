@@ -1,2 +1,2 @@
-candidate_MW,droop_R_pu,linear_delivery_5s_MW,nonlinear_delivery_5s_MW,nonlinear_final_delivery_MW,max_gate_pu,max_flow_pu,max_gate_rate_pus,decision
-2.700004497507031,0.05555546301441277,5.014118149481922,5.637239905863069,5.637241725966362,0.574479777687137,1.0665310451242025,0.11608775353625922,PASS
+candidate_MW,power_droop_percent,controller_R_pu,nonlinear_up_MW,nonlinear_down_MW,up_ratio,down_ratio,nyquist_min_distance,req8_nominal_pass,req8_margin95_pass,req9_pass,max_gate_pu,max_flow_pu,max_gate_rate_pus,decision
+2.507059257303282,11.96621097511253,0.1111110649234028,2.816928226314843,-2.8119735202216987,1.123598581927765,1.1216222799800901,1.8450120672519583,true,true,true,0.556479919928643,1.03313189886863,0.058401296576538586,PASS - engineering preparation
