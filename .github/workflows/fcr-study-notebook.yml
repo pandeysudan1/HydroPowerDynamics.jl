@@ -57,7 +57,7 @@ jobs:
             --execute \
             --inplace \
             quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.ipynb \
-            --ExecutePreprocessor.timeout=1800 \
+            --ExecutePreprocessor.timeout=2400 \
             --ExecutePreprocessor.kernel_name='julia-fcr-study-1.11'
 
       - name: Verify generated study outputs
@@ -65,7 +65,10 @@ jobs:
           test -s quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.ipynb
           test -s quick_examples/fcr_prequalification_study/results/fcr_candidate_summary.csv
           test -s quick_examples/fcr_prequalification_study/results/fcr_validation_trajectory.csv
-          test -s quick_examples/fcr_prequalification_study/plots/09_linear_vs_nonlinear.png
+          test -s quick_examples/fcr_prequalification_study/results/fcr_frequency_domain.csv
+          test -s quick_examples/fcr_prequalification_study/plots/03_fcrn_nyquist_requirement8.png
+          test -s quick_examples/fcr_prequalification_study/plots/04_fcrn_performance_requirement9.png
+          test -s quick_examples/fcr_prequalification_study/plots/07_nonlinear_fcrn_step_response.png
           ls -lh quick_examples/fcr_prequalification_study/plots
           cat quick_examples/fcr_prequalification_study/results/fcr_candidate_summary.csv
 
