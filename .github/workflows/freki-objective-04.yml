@@ -1,0 +1,49 @@
+name: FREKI Objective 4 multi-turbine validation
+
+on:
+  push:
+    branches: [AGC_Trollheim]
+    paths:
+      - 'quick_examples/freki_objectives/objective_04_multiturbine_validation.jl'
+      - '.github/workflows/freki-objective-04.yml'
+      - 'Project.toml'
+      - 'Manifest.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: AGC_Trollheim
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate environment
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+      - name: Run FREKI Objective 4
+        run: julia --project=. quick_examples/freki_objectives/objective_04_multiturbine_validation.jl
+      - name: Verify outputs
+        run: |
+          test -f quick_examples/freki_objectives/results/objective_04_multiturbine_summary.csv
+          test -f quick_examples/freki_objectives/results/objective_04_multiturbine_timeseries.csv
+          test -f quick_examples/freki_objectives/plots/04_01_power_response_comparison.png
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: freki-objective-04
+          path: |
+            quick_examples/freki_objectives/results/objective_04_*.csv
+            quick_examples/freki_objectives/plots/04_*.png
+      - name: Commit generated outputs
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add quick_examples/freki_objectives/results/objective_04_*.csv quick_examples/freki_objectives/plots/04_*.png
+          git diff --cached --quiet || git commit -m 'Generate FREKI Objective 4 results'
+          git push
