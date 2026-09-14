@@ -37,17 +37,16 @@ jobs:
           python-version: '3.12'
 
       - name: Resolve Julia environment
-        run: julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(; allow_autoprecomp=false)'
+        run: julia --project=. -e 'using Pkg; isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General"); Pkg.resolve(); Pkg.instantiate(; allow_autoprecomp=false)'
 
       - name: Install notebook tools
         run: |
           python -m pip install --upgrade pip
           pip install jupyter nbconvert jupytext
-          julia -e 'using Pkg; Pkg.activate(temp=true); Pkg.add("IJulia"); using IJulia; installkernel("Julia 1.11", "--project=$(pwd())")'
+          julia -e 'using Pkg; Pkg.activate(temp=true); isempty(Pkg.Registry.reachable_registries()) && Pkg.Registry.add("General"); Pkg.add("IJulia"); using IJulia; installkernel("Julia 1.11", "--project=$(pwd())")'
 
       - name: Build notebook from Jupytext source
-        run: |
-          jupytext --to ipynb quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.jl
+        run: jupytext --to ipynb quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.jl
 
       - name: Execute notebook with outputs
         run: |
