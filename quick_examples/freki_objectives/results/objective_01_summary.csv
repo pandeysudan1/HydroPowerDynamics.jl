@@ -1,0 +1,9 @@
+quantity,reference,identified_or_metric,unit
+R,0.5,0.4866266238104082,pu/pu
+Tg,0.3,0.785680942528614,s
+RMSE_frequency,NaN,0.011819724158746523,Hz
+RMSE_electrical_power,NaN,0.02716963620192087,MW
+RMSE_gate,NaN,0.0005824675198086908,pu
+RMSE_flow,NaN,0.022480101422907406,m3/s
+FIT_frequency,NaN,79.9818247398128,%
+FIT_electrical_power,NaN,92.71811140383508,%
