@@ -1,0 +1,2 @@
+candidate_MW,droop_R_pu,linear_delivery_5s_MW,nonlinear_delivery_5s_MW,nonlinear_final_delivery_MW,max_gate_pu,max_flow_pu,max_gate_rate_pus,decision
+2.700004497507031,0.05555546301441277,5.014118149481922,5.637239905863069,5.637241725966362,0.574479777687137,1.0665310451242025,0.11608775353625922,PASS
