@@ -51,8 +51,8 @@ end
     VariableLoadGenerator(; name, omega_rated, omega_s, D_d, eta_gen)
 
 Simple algebraic generator/load model with an external active-power demand input.
-The component is intended for disturbance studies where the load changes during
-one simulation without mutating a structural parameter.
+`RotationalPort.tau` is positive into the component, so a generator/load absorbs
+positive shaft torque.
 """
 @mtkmodel VariableLoadGenerator begin
     @parameters begin
@@ -73,6 +73,6 @@ one simulation without mutating a structural parameter.
         tau_gen ~ (P_load.u / omega_rated) *
                   (1.0 + D_d * (flange.omega - omega_s) / omega_s)
         P_elec ~ tau_gen * abs(flange.omega) * eta_gen
-        flange.tau ~ -tau_gen
+        flange.tau ~ tau_gen
     end
 end
