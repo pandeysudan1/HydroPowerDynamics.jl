@@ -6,6 +6,10 @@
     SimpleGovernorAGC(; name, R, T_g, K_i, omega_ref, gate_bias, gate_min, gate_max)
 
 Minimal hydro governor for load-frequency-control studies.
+
+The component intentionally leaves dynamic-state initial conditions to the
+assembled plant model. In particular, `tau_o` is an algebraic alias of `gate`
+and therefore carries no independent initialization binding.
 """
 @mtkmodel SimpleGovernorAGC begin
     @parameters begin
@@ -19,11 +23,11 @@ Minimal hydro governor for load-frequency-control studies.
     end
     @variables begin
         e_f(t)
-        xi(t) = 0.0
+        xi(t)
         u_cmd(t)
         u_sat(t)
-        gate(t) = 0.50
-        tau_o(t) = 0.50
+        gate(t)
+        tau_o(t)
     end
     @components begin
         speed_in = Blocks.RealInput()
