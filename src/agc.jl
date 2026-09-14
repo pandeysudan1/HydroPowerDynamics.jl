@@ -18,12 +18,12 @@ Minimal hydro governor for load-frequency-control studies.
         gate_max  = 1.00,   [description = "Maximum gate opening [pu]"]
     end
     @variables begin
-        e_f(t),
-        xi(t) = 0.0,
-        u_cmd(t),
-        u_sat(t),
-        gate(t) = 0.50,
-        tau_o(t) = 0.50,
+        e_f(t)
+        xi(t) = 0.0
+        u_cmd(t)
+        u_sat(t)
+        gate(t) = 0.50
+        tau_o(t) = 0.50
     end
     @components begin
         speed_in = Blocks.RealInput()
@@ -52,14 +52,14 @@ one simulation without mutating a structural parameter.
 """
 @mtkmodel VariableLoadGenerator begin
     @parameters begin
-        omega_rated = 157.08,
-        omega_s     = 157.08,
-        D_d         = 0.0,
-        eta_gen     = 1.0,
+        omega_rated = 157.08, [description = "Rated shaft speed [rad/s]"]
+        omega_s     = 157.08, [description = "Synchronous shaft speed [rad/s]"]
+        D_d         = 0.0,    [description = "Speed-dependent load damping [-]"]
+        eta_gen     = 1.0,    [description = "Generator efficiency [-]"]
     end
     @variables begin
-        tau_gen(t),
-        P_elec(t),
+        tau_gen(t)
+        P_elec(t)
     end
     @components begin
         flange = RotationalPort()
