@@ -1,0 +1,49 @@
+name: FREKI Objective 3 improve FCR
+
+on:
+  push:
+    branches: [AGC_Trollheim]
+    paths:
+      - 'quick_examples/freki_objectives/objective_03_increase_fcr.jl'
+      - 'quick_examples/freki_objectives/results/objective_01b_summary.csv'
+      - 'quick_examples/freki_objectives/results/objective_02_summary.csv'
+      - '.github/workflows/freki-objective-03.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  improve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate environment
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+      - name: Run FREKI Objective 3
+        run: julia --project=. quick_examples/freki_objectives/objective_03_increase_fcr.jl
+      - name: Verify outputs
+        run: |
+          test -f quick_examples/freki_objectives/results/objective_03_summary.csv
+          test -f quick_examples/freki_objectives/results/objective_03_interventions.csv
+          test -f quick_examples/freki_objectives/plots/03_01_intervention_ranking.png
+          test -f quick_examples/freki_objectives/plots/03_05_engineering_leverage.png
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: freki-objective-03
+          path: |
+            quick_examples/freki_objectives/results/objective_03_*.csv
+            quick_examples/freki_objectives/plots/03_*.png
+      - name: Commit generated outputs
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add quick_examples/freki_objectives/results/objective_03_*.csv quick_examples/freki_objectives/plots/03_*.png
+          git diff --cached --quiet && exit 0
+          git commit -m 'Generate FREKI Objective 3 results'
+          git push
