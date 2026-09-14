@@ -1,0 +1,92 @@
+name: FCR study notebook
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [FCR_study]
+    paths:
+      - 'quick_examples/fcr_prequalification_study/**'
+      - 'src/**'
+      - 'Project.toml'
+      - '.github/workflows/fcr-study-notebook.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  execute-notebook:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    env:
+      JULIA_PKG_PRECOMPILE_AUTO: '0'
+      GKSwstype: '100'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: FCR_study
+          fetch-depth: 0
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+
+      - uses: julia-actions/cache@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve Julia environment
+        run: julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(; allow_autoprecomp=false)'
+
+      - name: Install notebook tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install jupyter nbconvert jupytext
+          julia -e 'using Pkg; Pkg.activate(temp=true); Pkg.add("IJulia"); using IJulia; installkernel("Julia 1.11", "--project=$(pwd())")'
+
+      - name: Build notebook from Jupytext source
+        run: |
+          jupytext --to ipynb quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.jl
+
+      - name: Execute notebook with outputs
+        run: |
+          set -o pipefail
+          jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.ipynb \
+            --ExecutePreprocessor.timeout=1800 \
+            --ExecutePreprocessor.kernel_name='julia-1.11'
+
+      - name: Verify generated study outputs
+        run: |
+          test -s quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.ipynb
+          test -s quick_examples/fcr_prequalification_study/results/fcr_candidate_summary.csv
+          test -s quick_examples/fcr_prequalification_study/results/fcr_validation_trajectory.csv
+          test -s quick_examples/fcr_prequalification_study/plots/09_linear_vs_nonlinear.png
+          ls -lh quick_examples/fcr_prequalification_study/plots
+          cat quick_examples/fcr_prequalification_study/results/fcr_candidate_summary.csv
+
+      - name: Commit executed notebook and outputs
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.ipynb
+          git add quick_examples/fcr_prequalification_study/plots
+          git add quick_examples/fcr_prequalification_study/results
+          if ! git diff --cached --quiet; then
+            git commit -m 'Run FCR study notebook with outputs [skip ci]'
+            git push origin HEAD:FCR_study
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fcr-study-notebook
+          path: |
+            quick_examples/fcr_prequalification_study/FCR_Prequalification_Study.ipynb
+            quick_examples/fcr_prequalification_study/plots
+            quick_examples/fcr_prequalification_study/results
+          if-no-files-found: warn
