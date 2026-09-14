@@ -1,0 +1,17 @@
+quantity,value,unit
+K_q,0.3197509802391192,-
+eta_max,0.948071139848489,-
+c_eta,-1.8439151221827792,-
+Q_rated,36.44452242325365,m3/s
+RMSE_Q_validation,0.07944453924960582,m3/s
+RMSE_P_validation,0.15704163458198922,MW
+REL_RMSE_Q_validation,0.21900852583054606,%
+REL_RMSE_P_validation,0.12269613988195915,%
+FIT_Q_validation,33.914033418720365,%
+FIT_P_validation,54.61093107972903,%
+RMSE_Q_startup,0.14863625581031956,m3/s
+RMSE_P_startup,4.318843276423741,MW
+turbine_model_health,GREEN,state
+hydraulic_model_health,AMBER,state
+governor_model_health,AMBER,state
+FCR_readiness,MORE DATA REQUIRED,state
