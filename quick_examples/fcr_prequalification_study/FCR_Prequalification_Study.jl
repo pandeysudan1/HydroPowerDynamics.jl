@@ -184,7 +184,7 @@ savefig(p3,joinpath(plotdir,"03_fcrn_nyquist_requirement8.png")); display(p3)
 
 Kmargin = 0.95
 Gc_mag = Kmargin .* abs.(Gperf ./ (1 .+ Fpts .* Gperf))
-requirement_mag = abs.(1 .+ 70im .* wtest)  # |1/D(jw)|
+requirement_mag = abs.(1 .+ 70im .* wtest)
 perf_ratio = Gc_mag ./ requirement_mag
 pass_perf = maximum(perf_ratio) < 1.0
 p4 = plot(periods,Gc_mag,xscale=:log10,marker=:circle,xlabel="Sine period T [s]",ylabel="Magnitude",title="Nordic FCR-N frequency-domain performance screening",label="closed-loop criterion")
@@ -207,7 +207,7 @@ savefig(p4,joinpath(plotdir,"04_fcrn_performance_requirement9.png")); display(p4
 # The guide-vane and flow limits are plant assumptions, not TSO rules.
 
 # %%
-dt = 0.5
+dt = 0.2
 times = collect(0.0:dt:1260.0)
 N = length(times)
 freq = fcrn_step_frequency.(times)
@@ -227,7 +227,6 @@ for k in 1:N-1
     @constraint(m,y[k]-y[k+1] <= DY_CLOSE*dt)
 end
 
-# Evaluate late in each 5-minute full-activation plateau.
 k_up = argmin(abs.(times .- 650.0))
 k_dn = argmin(abs.(times .- 950.0))
 dP_up = P0_MW*(q[k_up]-1)
@@ -241,9 +240,16 @@ optimize!(m)
 
 Cstar = value(C_FCRN); yv=value.(y); qv=value.(q); dPv=P0_MW.*(qv.-1)
 rate=diff(yv)./dt
-Rstar = (DF_FCRN_HZ/F0_HZ)/(Cstar/PBASE_MW)
+
+# Two droop quantities are intentionally reported.
+# Rpower is a conventional power-base interpretation for decision makers.
+# Rctrl is the internal gate-controller R used by SimpleGovernorAGC, whose output is absolute gate pu.
+Rpower = (DF_FCRN_HZ/F0_HZ)/(Cstar/PBASE_MW)
+Rctrl = (DF_FCRN_HZ/F0_HZ)/(Y0*Cstar/P0_MW)
+
 @printf("JuMP status=%s\n",string(termination_status(m)))
-@printf("FCR-N candidate=%.4f MW; equivalent droop on 150 MW base=%.4f%%\n",Cstar,100Rstar)
+@printf("FCR-N candidate=%.4f MW\n",Cstar)
+@printf("Power-base droop interpretation=%.4f%%; controller R=%.6f pu/pu\n",100Rpower,Rctrl)
 @printf("Linear steady up=%.4f MW; steady down=%.4f MW; max gate rate=%.4f pu/s\n",dPv[k_up],dPv[k_dn],maximum(abs.(rate)))
 
 p5 = plot(times./60,dPv,xlabel="Time [min]",ylabel="ΔP [MW]",title="JuMP FCR-N step-sequence response",label="linear response")
@@ -257,7 +263,7 @@ savefig(p6,joinpath(plotdir,"06_jump_fcrn_gate.png")); display(p6)
 # ## 6. Full nonlinear HydroPowerDynamics.jl replay of the FCR-N step test
 #
 # The optimized candidate is mapped to the HPD governor and the same FCR-N frequency sequence is injected at a prescribed shaft-frequency boundary.
-# We then calculate the steady-state response from the last 60 s of the 49.9 Hz and 50.1 Hz plateaus, using the same practical idea as the formal test: judge maintained response, not a single noisy sample.
+# We calculate steady response from the last 60 s of the 49.9 Hz and 50.1 Hz plateaus.
 
 # %%
 @mtkmodel PrescribedSpeedBoundary begin
@@ -265,13 +271,16 @@ savefig(p6,joinpath(plotdir,"06_jump_fcrn_gate.png")); display(p6)
         speed_in = Blocks.RealInput()
         flange = RotationalPort()
     end
-    @variables phi(t)
+    @variables begin
+        phi(t)
+    end
     @equations begin
         flange.omega ~ speed_in.u
         flange.phi ~ phi
         D(phi) ~ speed_in.u
     end
 end
+
 function pipe_guess(L,Dpipe)
     Ap=π*Dpipe^2/4; μ=1e-3
     Re=DM0*Dpipe/(μ*Ap)
@@ -303,7 +312,7 @@ function build_nonlinear_fcrn(Rdroop)
     (;sys,headrace,penstock,turbine,governor,speedbc)
 end
 
-nl=build_nonlinear_fcrn(Rstar)
+nl=build_nonlinear_fcrn(Rctrl)
 u0=Dict(nl.headrace.dm=>DM0,nl.penstock.dm=>DM0,nl.governor.xi=>0.0,nl.governor.gate=>Y0,nl.speedbc.phi=>0.0)
 guesses=Dict(nl.headrace.p_avg=>P_UP,nl.headrace.Re=>HRG.Re,nl.headrace.f_D=>HRG.fD,nl.headrace.dp_f=>HRG.dpf,nl.penstock.p_avg=>P_UP,nl.penstock.Re=>PNG.Re,nl.penstock.f_D=>PNG.fD,nl.penstock.dp_f=>PNG.dpf,nl.turbine.H=>H_GROSS,nl.turbine.Q=>Q0,nl.turbine.eta=>ETA0,nl.turbine.P_mech=>P0_MW*1e6,nl.turbine.dm=>DM0,nl.turbine.tau_shaft=>TAU_SHAFT0)
 prob=ODEProblem(nl.sys,u0,(-100.0,1260.0);guesses=guesses)
@@ -314,7 +323,8 @@ tv=sol.t; keep=findall(>=(0.0),tv); tt=tv[keep]
 pm=sol[nl.turbine.P_mech][keep]./1e6; gate_nl=sol[nl.governor.tau_o][keep]; q_nl=sol[nl.turbine.Q][keep]
 base_idx=findall(x->300<=x<360,tt); up_idx=findall(x->600<=x<660,tt); dn_idx=findall(x->900<=x<960,tt); end_idx=findall(x->1200<=x<=1260,tt)
 Pbase=mean(pm[base_idx]); Pup=mean(pm[up_idx]); Pdn=mean(pm[dn_idx]); Pend=mean(pm[end_idx])
-ΔPup=Pup-0.5*(Pbase+Pend); ΔPdn=Pdn-0.5*(Pbase+Pend)
+Pref=0.5*(Pbase+Pend)
+ΔPup=Pup-Pref; ΔPdn=Pdn-Pref
 up_ratio=ΔPup/Cstar; dn_ratio=abs(ΔPdn)/Cstar
 pass_ss_up = 0.95 <= up_ratio <= 1.20
 pass_ss_dn = 0.95 <= dn_ratio <= 1.20
@@ -323,7 +333,7 @@ pass_gate = minimum(gate_nl)>=Y_MIN-1e-6 && maximum(gate_nl)<=Y_MAX+1e-6
 pass_flow = minimum(q_nl)/Q0>=Q_MIN_PU-1e-3 && maximum(q_nl)/Q0<=Q_MAX_PU+1e-3
 pass_rate = maximum(rate_nl)<=DY_OPEN+2e-3 && minimum(rate_nl)>=-DY_CLOSE-2e-3
 
-p7=plot(tt./60,pm.-Pbase,xlabel="Time [min]",ylabel="ΔP [MW]",title="Nonlinear HPD replay of Nordic FCR-N step sequence",label="HPD nonlinear")
+p7=plot(tt./60,pm.-Pref,xlabel="Time [min]",ylabel="ΔP [MW]",title="Nonlinear HPD replay of Nordic FCR-N step sequence",label="HPD nonlinear")
 plot!(p7,tt./60,Cstar.*((F0_HZ .- fcrn_step_frequency.(tt))./DF_FCRN_HZ),linestyle=:dash,label="theoretical target")
 savefig(p7,joinpath(plotdir,"07_nonlinear_fcrn_step_response.png")); display(p7)
 
@@ -343,13 +353,13 @@ savefig(p9,joinpath(plotdir,"09_nonlinear_fcrn_flow.png")); display(p9)
 engineering_pass = all((pass_ss_up,pass_ss_dn,pass_stab_95,pass_perf,pass_gate,pass_flow,pass_rate))
 decision = engineering_pass ? "PASS - engineering preparation" : "REDUCE / RETUNE"
 summary = DataFrame(
-    metric=["JuMP FCR-N candidate [MW]","Equivalent droop on 150 MW base [%]","Nonlinear upward steady response [MW]","Nonlinear downward steady response [MW]","Upward response / offer","Downward response / offer","Nyquist min distance to -1","Requirement 8 nominal circle pass","Requirement 8 95% margin pass","Requirement 9 performance pass","Max guide vane [pu]","Max flow/Q0 [pu]","Max |gate rate| [pu/s]","Decision"],
-    value=[@sprintf("%.4f",Cstar),@sprintf("%.4f",100Rstar),@sprintf("%.4f",ΔPup),@sprintf("%.4f",ΔPdn),@sprintf("%.4f",up_ratio),@sprintf("%.4f",dn_ratio),@sprintf("%.4f",min_dist),string(pass_stab_nominal),string(pass_stab_95),string(pass_perf),@sprintf("%.4f",maximum(gate_nl)),@sprintf("%.4f",maximum(q_nl)/Q0),@sprintf("%.4f",maximum(abs.(rate_nl))),decision])
+    metric=["JuMP FCR-N candidate [MW]","Power-base droop interpretation [%]","Internal controller R [pu/pu]","Nonlinear upward steady response [MW]","Nonlinear downward steady response [MW]","Upward response / offer","Downward response / offer","Nyquist min distance to -1","Requirement 8 nominal circle pass","Requirement 8 95% margin pass","Requirement 9 performance pass","Max guide vane [pu]","Max flow/Q0 [pu]","Max |gate rate| [pu/s]","Decision"],
+    value=[@sprintf("%.4f",Cstar),@sprintf("%.4f",100Rpower),@sprintf("%.6f",Rctrl),@sprintf("%.4f",ΔPup),@sprintf("%.4f",ΔPdn),@sprintf("%.4f",up_ratio),@sprintf("%.4f",dn_ratio),@sprintf("%.4f",min_dist),string(pass_stab_nominal),string(pass_stab_95),string(pass_perf),@sprintf("%.4f",maximum(gate_nl)),@sprintf("%.4f",maximum(q_nl)/Q0),@sprintf("%.4f",maximum(abs.(rate_nl))),decision])
 display(summary)
 
-record=DataFrame(candidate_MW=[Cstar],droop_percent=[100Rstar],nonlinear_up_MW=[ΔPup],nonlinear_down_MW=[ΔPdn],up_ratio=[up_ratio],down_ratio=[dn_ratio],nyquist_min_distance=[min_dist],req8_nominal_pass=[pass_stab_nominal],req8_margin95_pass=[pass_stab_95],req9_pass=[pass_perf],max_gate_pu=[maximum(gate_nl)],max_flow_pu=[maximum(q_nl)/Q0],max_gate_rate_pus=[maximum(abs.(rate_nl))],decision=[decision])
+record=DataFrame(candidate_MW=[Cstar],power_droop_percent=[100Rpower],controller_R_pu=[Rctrl],nonlinear_up_MW=[ΔPup],nonlinear_down_MW=[ΔPdn],up_ratio=[up_ratio],down_ratio=[dn_ratio],nyquist_min_distance=[min_dist],req8_nominal_pass=[pass_stab_nominal],req8_margin95_pass=[pass_stab_95],req9_pass=[pass_perf],max_gate_pu=[maximum(gate_nl)],max_flow_pu=[maximum(q_nl)/Q0],max_gate_rate_pus=[maximum(abs.(rate_nl))],decision=[decision])
 CSV.write(joinpath(resultdir,"fcr_candidate_summary.csv"),record)
-traj=DataFrame(time_s=tt,frequency_Hz=fcrn_step_frequency.(tt),nonlinear_power_MW=pm,nonlinear_deltaP_MW=pm.-Pbase,nonlinear_gate_pu=gate_nl,nonlinear_Q_m3s=q_nl)
+traj=DataFrame(time_s=tt,frequency_Hz=fcrn_step_frequency.(tt),nonlinear_power_MW=pm,nonlinear_deltaP_MW=pm.-Pref,nonlinear_gate_pu=gate_nl,nonlinear_Q_m3s=q_nl)
 CSV.write(joinpath(resultdir,"fcr_validation_trajectory.csv"),traj)
 CSV.write(joinpath(resultdir,"fcr_frequency_domain.csv"),freq_table)
 println("Final decision: ",decision)
@@ -363,4 +373,4 @@ println("Final decision: ",decision)
 # 3. The nonlinear HPD step replay checks whether hydraulic physics changes the steady response enough to invalidate the candidate.
 # 4. If the simulated candidate passes, it is worth taking to the physical prequalification test. If it fails, retune or derate before spending test time.
 #
-# The next extension is to repeat the same architecture for dynamic FCR-D up/down, including the official ramp test and the 7.5 s power/energy criteria.
+# The next extension is to repeat the same architecture at all required operating points, add the 15-minute endurance case and measured-response linearity checks, and then extend to dynamic FCR-D up/down.
