@@ -15,14 +15,17 @@ jobs:
   simulate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      JULIA_PKG_PRECOMPILE_AUTO: '0'
+      JULIA_NUM_PRECOMPILE_TASKS: '2'
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.11'
       - uses: julia-actions/cache@v2
-      - name: Instantiate
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+      - name: Instantiate without full precompile
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate(; allow_autoprecomp=false)'
       - name: Run Trollheim AGC comparison
         run: julia --project=. quick_examples/trollheim_agc_surgetank_compare/trollheim_agc_surgetank_compare.jl | tee agc_trollheim.log
       - name: Upload results
@@ -31,4 +34,4 @@ jobs:
           name: agc-trollheim-results
           path: |
             agc_trollheim.log
-            quick_examples/trollheim_agc_surgetank_compare/plots/*.png
+            quick_examples/trollheim_agc_surgetank_compare/results/*.csv
