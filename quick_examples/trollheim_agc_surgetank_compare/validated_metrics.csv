@@ -1,0 +1,13 @@
+metric,without_surgetank,with_surgetank
+pre_frequency_range_Hz,0.0000000041,0.0000838576
+pre_mechanical_power_range_MW,0.0000000043,0.0006416827
+nadir_Hz,48.0826396434,48.1659376917
+nadir_time_s,7.5800000000,7.8600000000
+final_frequency_Hz,49.8293776331,49.7531021337
+final_mechanical_power_MW,89.7701852624,89.6627818504
+final_electrical_power_MW,89.6928797396,89.5555838407
+final_gate_pu,0.6331782163,0.6363080358
+final_turbine_flow_m3s,26.0206608750,26.0933389943
+IAE_Hz_s,43.7442643169,43.7989631087
+settling_within_0p05_Hz_by_65s,false,false
+nadir_improvement_with_surge_Hz,,0.0832980483

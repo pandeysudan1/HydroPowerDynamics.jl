@@ -1,0 +1,41 @@
+name: AGC Trollheim validation
+
+on:
+  push:
+    branches: [AGC_Trollheim]
+    paths:
+      - 'src/**'
+      - 'Project.toml'
+      - 'Manifest.toml'
+      - 'quick_examples/trollheim_agc_surgetank_compare/**'
+      - '.github/workflows/agc-trollheim.yml'
+  workflow_dispatch:
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JULIA_PKG_PRECOMPILE_AUTO: '0'
+      JULIA_NUM_PRECOMPILE_TASKS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate without full precompile
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate(; allow_autoprecomp=false)'
+      - name: Run Trollheim AGC comparison
+        shell: bash
+        run: |
+          set -o pipefail
+          julia --project=. quick_examples/trollheim_agc_surgetank_compare/trollheim_agc_surgetank_compare.jl | tee agc_trollheim.log
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agc-trollheim-results
+          path: |
+            agc_trollheim.log
+            quick_examples/trollheim_agc_surgetank_compare/results/*.csv
