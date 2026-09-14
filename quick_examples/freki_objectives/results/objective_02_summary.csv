@@ -1,0 +1,7 @@
+quantity,value
+nominal_screening_capacity_MW,10.25
+robust_screening_capacity_MW,9.75
+limiting_scenario,conservative
+formal_qualified_capacity,NOT ESTABLISHED
+hydraulic_model_health,AMBER
+governor_model_health,AMBER
