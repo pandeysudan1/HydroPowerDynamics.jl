@@ -1,76 +1,71 @@
 # FCR prequalification study
 
-This folder turns the report workflow into one executable engineering study using `HydroPowerDynamics.jl`, `ControlSystemsBase.jl`, `JuMP.jl` and `Ipopt.jl`.
+This folder implements one executable FCR screening and nonlinear verification workflow using `HydroPowerDynamics.jl`, `ControlSystemsBase.jl`, `JuMP.jl` and `Ipopt.jl`.
 
 The engineering chain is
 
 ```text
 nonlinear HPD plant
-      -> local linear screening model
-      -> frequency-domain analysis
+      -> reduced local model
+      -> Bode / phase / Nyquist screening
       -> JuMP reserve-capacity search
+      -> map candidate reserve to governor droop
       -> nonlinear HPD replay
       -> PASS / REDUCE / RETUNE
 ```
 
-This is a **prequalification aid**, not an official Statnett qualification decision. The present numerical limits are deliberately transparent proxy limits. Product-specific Nordic/Statnett trajectories, operating points, acceptance envelopes, measurement-path treatment and reporting requirements should later be supplied as an external qualification-data layer.
+This is a **prequalification aid**, not an official Statnett qualification decision. The present test settings are transparent proxy limits used to demonstrate the workflow. Product-specific Nordic/Statnett trajectories, operating points, acceptance envelopes, measurement-path treatment and reporting requirements should be supplied later as an external qualification-data layer.
 
 ---
 
 ## 1. Research question
 
-The practical question is:
+> **How much FCR can a hydropower unit offer at a given operating point while respecting actuator, hydraulic and dynamic-response limits, and can a cheap linear/JuMP screening result be trusted when replayed on the nonlinear HydroPowerDynamics.jl model?**
 
-> **How much FCR can a hydropower unit offer at a given operating point while respecting actuator, hydraulic and dynamic-response limits, and can a cheap linear/JuMP screening result be trusted when it is replayed on the nonlinear HydroPowerDynamics.jl model?**
+The workflow separates two engineering problems:
 
-The motivation is to reduce repeated manual prequalification work. Instead of manually trying one droop value after another, we first formulate the reserve capability as an optimization problem. The optimizer returns a candidate reserve and the candidate is then checked on the nonlinear plant.
+1. **screening:** find a candidate reserve cheaply;
+2. **verification:** replay that candidate on the nonlinear hydraulic model before accepting it.
 
-The method therefore separates two questions:
-
-1. **Screening:** what is the largest reserve that appears feasible in a reduced local model?
-2. **Verification:** does that candidate remain feasible when nonlinear hydraulic physics are restored?
-
-A disagreement between the two models is itself a useful engineering result because it identifies the need for derating, controller retuning, or a better screening model.
+This replaces repeated manual droop tuning with a constrained search followed by one higher-fidelity validation layer.
 
 ---
 
-## 2. Operating point and test input
+## 2. Operating point and proxy test
 
-The first case is a Trollheim-inspired 150 MW hydro unit operated around
+The first study uses a Trollheim-inspired 150 MW hydro unit around
 
-- base power: `P_base = 150 MW`,
-- initial mechanical power: `P0 = 75 MW`,
-- nominal frequency: `f0 = 50 Hz`,
-- initial guide vane: `y0 = 0.53848 pu`,
-- initial flow: `Q0 = 22.1375 m3/s`,
-- gross head: `H = 371 m`,
-- governor actuator time constant: `Tg = 0.30 s`.
+- `P_base = 150 MW`,
+- `P0 = 75 MW`,
+- `f0 = 50 Hz`,
+- `y0 = 0.53848 pu`,
+- `Q0 = 22.1375 m3/s`,
+- gross head `H = 371 m`,
+- governor actuator time constant `Tg = 0.30 s`.
 
-The proxy prequalification disturbance is a frequency step
+The proxy disturbance is
 
 $$
 \Delta f(t)=
 \begin{cases}
 0, & t<0,\\
--0.10\ \mathrm{Hz}, & t\ge 0.
+-0.10\ \mathrm{Hz}, & t\ge0.
 \end{cases}
 $$
 
-The current proxy requirement asks for at least 90% of the offered reserve after 5 s and approximately the full reserve by the end of the simulation. These values are used to exercise the workflow and are **not claimed as current Statnett limits**.
+The proxy requirement asks for at least 90% of the offered reserve after 5 s and approximately full delivery by the end of the 30 s test. These are **not claimed as present Statnett acceptance limits**.
 
 ---
 
 ## 3. Reduced linear model
 
-The local hydraulic screening model uses normalized flow deviation `q` and guide-vane position `y`:
+The screening model uses normalized flow deviation and guide-vane position:
 
 $$
 \dot{\Delta q}
 =
 \frac{1}{T_w}
-\left(
-\frac{\Delta y}{y_0}-\Delta q
-\right),
+\left(\frac{\Delta y}{y_0}-\Delta q\right),
 $$
 
 $$
@@ -80,84 +75,67 @@ $$
 \left(-K_f\Delta f-\Delta y\right),
 $$
 
-with incremental power
+with
 
 $$
 \Delta P=P_0\Delta q.
 $$
 
-The water starting time is estimated from the headrace and penstock geometry,
+The water starting time is estimated as
 
 $$
-T_w =
-\frac{L_h Q_0}{g A_h H}
+T_w=
+\frac{L_hQ_0}{gA_hH}
 +
-\frac{L_p Q_0}{g A_p H},
+\frac{L_pQ_0}{gA_pH}
+\approx0.35\ \mathrm{s}.
 $$
-
-which gives approximately
-
-$$
-T_w \approx 0.350\ \mathrm{s}
-$$
-
-for the present case.
 
 In state-space form,
 
 $$
-\dot x = Ax+B\Delta f,
-\qquad
-\Delta P=Cx,
+\dot x=Ax+B\Delta f,\qquad \Delta P=Cx,
 $$
 
-where
+with
 
 $$
 x=
-\begin{bmatrix}
-\Delta q\\
-\Delta y
-\end{bmatrix},
+\begin{bmatrix}\Delta q\\\Delta y\end{bmatrix},
 $$
 
 $$
 A=
 \begin{bmatrix}
--1/T_w & 1/(T_w y_0)\\
+-1/T_w & 1/(T_wy_0)\\
 0 & -1/T_g
 \end{bmatrix},
-\qquad
+\quad
 B=
 \begin{bmatrix}
-0\\
--K_f/T_g
+0\\-K_f/T_g
 \end{bmatrix},
-\qquad
+\quad
 C=
-\begin{bmatrix}
-P_0 & 0
-\end{bmatrix}.
+\begin{bmatrix}P_0&0\end{bmatrix}.
 $$
 
-This model is intentionally cheap. It is used for poles, Bode/Nyquist inspection and the JuMP reserve search. It is not treated as the final physical truth.
+This model is intentionally inexpensive. It is used for frequency-domain inspection and JuMP screening, not as the final physical truth.
 
 ---
 
-## 4. FCR reserve optimization in JuMP
+## 4. JuMP problem formulation
 
-The decision variable is the offered reserve
-
-$$
-P_{\mathrm{FCR}} \ge 0.
-$$
-
-The optimization problem is
+The optimization variable is the offered reserve
 
 $$
-\boxed{
-\max P_{\mathrm{FCR}}
-}
+P_{\mathrm{FCR}}\ge0.
+$$
+
+The problem is
+
+$$
+\boxed{\max P_{\mathrm{FCR}}}
 $$
 
 subject to the discretized governor and hydraulic dynamics
@@ -178,7 +156,7 @@ q_k+
 \left(\frac{y_k}{y_0}-q_k\right),
 $$
 
-where the FCR command is proportional to the test frequency deviation,
+where
 
 $$
 y_k^{cmd}
@@ -188,19 +166,15 @@ y_0-
 \frac{\Delta f_k}{\Delta f_{full}}.
 $$
 
-The candidate must respect guide-vane bounds
+The plant constraints are
 
 $$
 y_{min}\le y_k\le y_{max},
 $$
 
-flow bounds
-
 $$
 q_{min}\le q_k\le q_{max},
 $$
-
-guide-vane opening and closing rates
 
 $$
 -\dot y_{close}
@@ -210,21 +184,17 @@ $$
 \dot y_{open},
 $$
 
-and dynamic delivery requirements
+and the response requirements are
 
 $$
-P_0(q_{5s}-1)
-\ge
-\alpha_{req}P_{\mathrm{FCR}},
+P_0(q_{5s}-1)\ge0.90P_{\mathrm{FCR}},
 $$
 
 $$
-P_0(q_{end}-1)
-\ge
-0.98P_{\mathrm{FCR}}.
+P_0(q_{end}-1)\ge0.98P_{\mathrm{FCR}}.
 $$
 
-The current proxy bounds are
+Current proxy bounds are
 
 $$
 y\in[0.05,1.0],
@@ -232,15 +202,13 @@ y\in[0.05,1.0],
 q\in[0.70,1.45],
 $$
 
-and
-
 $$
 |\dot y|\le0.12\ \mathrm{pu/s}.
 $$
 
-### Linear optimization result
+### Active constraint sanity check
 
-For the present equations the reserve search is dominated by the **guide-vane opening-rate constraint**. Immediately after the frequency step,
+Immediately after the frequency step,
 
 $$
 \dot y(0^+)\approx
@@ -259,22 +227,44 @@ $$
 \boxed{P_{\mathrm{FCR}}^*\approx2.7\ \mathrm{MW}}.
 $$
 
-This is a useful sanity check for the JuMP solution: if the optimizer returns approximately 2.7 MW, the active constraint has a clear physical meaning rather than being a black-box numerical result.
-
-For this candidate the reduced model predicts approximately
-
-- maximum guide-vane opening: `0.5745 pu`,
-- maximum normalized flow: `1.0669 pu`,
-- 5 s incremental power: `5.01 MW`,
-- maximum opening rate: `0.12 pu/s`.
-
-The large difference between the offered reserve (2.7 MW) and the reduced-model incremental power is a warning that the present first-order screening normalization is deliberately simplified. This is exactly why the nonlinear HPD replay is required before interpreting the reserve as plant capability.
+The optimizer result matches this analytical estimate, so the candidate is physically interpretable rather than a black-box numerical number.
 
 ---
 
-## 5. Mapping the optimized reserve to governor droop
+## 5. Executed JuMP result
 
-The candidate reserve is converted into the primary governor droop used by the nonlinear HPD model:
+The CI-executed notebook produced
+
+| Quantity | Result |
+|---|---:|
+| JuMP candidate reserve | **2.7000 MW** |
+| Candidate droop | **0.05556 pu/pu = 5.56%** |
+| Linear 5 s delivery | **5.0141 MW** |
+| Maximum gate | **0.5745 pu** |
+| Maximum normalized flow | about **1.067 pu** |
+| Maximum gate rate | approximately the **0.12 pu/s** limit |
+
+The candidate reserve is therefore primarily limited by the **guide-vane opening-rate constraint**, not by total gate travel or flow headroom.
+
+A notable result is that the reduced model delivers more incremental power than the nominal 2.7 MW reserve offer. This means the first screening formulation is conservative in its decision variable but does not yet enforce a tight tracking band around the offered FCR value. That mismatch is not hidden; it is treated as a model-formulation diagnostic.
+
+A stronger next formulation should include an acceptance band such as
+
+$$
+\alpha_{min}P_{\mathrm{FCR}}
+\le
+\Delta P(t)
+\le
+\alpha_{max}P_{\mathrm{FCR}},
+$$
+
+or a weighted tracking objective, so that the optimized offer and delivered power are more directly comparable.
+
+---
+
+## 6. Mapping reserve to droop
+
+The reserve candidate is mapped to primary droop by
 
 $$
 R^*
@@ -283,28 +273,28 @@ R^*
 {P_{\mathrm{FCR}}^*/P_0}.
 $$
 
-For the linear candidate above,
+For the executed case,
 
 $$
 R^*
 \approx
-\frac{0.10/50}{2.7/75}
-\approx0.0556,
+\frac{0.10/50}{2.7000/75}
+\approx0.05556,
 $$
 
-or about
+or
 
 $$
 \boxed{R^*\approx5.56\%}.
 $$
 
-Integral action is disabled in this test (`Ki = 0`) so that the response represents primary frequency action rather than slower secondary restoration.
+Integral action is disabled (`Ki = 0`) so this test isolates primary frequency response rather than secondary restoration.
 
 ---
 
-## 6. Nonlinear HydroPowerDynamics.jl verification
+## 7. Nonlinear HydroPowerDynamics.jl verification
 
-The nonlinear verification restores the physical chain
+The nonlinear replay uses
 
 ```text
 Reservoir -> headrace -> penstock -> Francis turbine -> prescribed shaft-frequency boundary
@@ -313,9 +303,9 @@ Reservoir -> headrace -> penstock -> Francis turbine -> prescribed shaft-frequen
                                   FCR governor
 ```
 
-The frequency trajectory used in the screening test is imposed at the shaft boundary. The nonlinear model then computes the hydraulic flow, friction, turbine power and guide-vane response rather than assuming the linearized relationship remains exact.
+The same frequency test is imposed at the shaft boundary. HPD then computes hydraulic flow, losses, turbine power and governor motion from the nonlinear component equations.
 
-The candidate is accepted only if the nonlinear trajectory satisfies all of the following checks:
+The nonlinear acceptance checks are
 
 $$
 \Delta P(5s)\ge0.90P_{\mathrm{FCR}}^*,
@@ -329,143 +319,182 @@ $$
 q_{min}\le Q(t)/Q_0\le q_{max},
 $$
 
-and
-
 $$
 -\dot y_{close}\le\dot y(t)\le\dot y_{open}.
 $$
 
-The notebook writes the final engineering decision as either
+### Executed nonlinear result
 
-```text
-PASS
-```
+| Quantity | Nonlinear HPD result |
+|---|---:|
+| Candidate reserve | **2.7000 MW** |
+| Delivery at 5 s | **5.6372 MW** |
+| Final delivery | **5.6372 MW** |
+| Maximum gate | **0.57448 pu** |
+| Maximum flow / Q0 | **1.06653 pu** |
+| Maximum gate rate | **0.11609 pu/s** |
+| Engineering decision | **PASS** |
 
-or
+The nonlinear model therefore satisfies the present proxy gate, flow, rate and minimum-delivery checks.
 
-```text
-REDUCE / RETUNE
-```
-
-The nonlinear result, not the linear optimization alone, is the important prequalification result.
+The result is a **PASS for this proxy engineering test**, not an official FCR-N/FCR-D qualification.
 
 ---
 
-## 7. Plot results and interpretation
+## 8. Plot results and engineering interpretation
 
-### 7.1 Linear Bode magnitude
+### 8.1 Linear Bode magnitude
 
 ![Linear Bode magnitude](plots/01_linear_bode_magnitude.png)
 
-**What to read:** this plot shows how strongly a frequency disturbance is converted into incremental mechanical power as disturbance frequency changes.
+The low-frequency gain represents the quasi-steady conversion from frequency deviation to mechanical power. The magnitude decreases as the disturbance becomes faster than the governor/hydraulic response. This illustrates why MW headroom alone is not sufficient for FCR qualification.
 
-**Interpretation:** the low-frequency gain represents the quasi-steady FCR sensitivity. The magnitude rolls off when the disturbance becomes faster than the governor/hydraulic dynamics. A plant can therefore have adequate steady-state reserve but still fail a fast dynamic requirement.
-
-### 7.2 Linear Bode phase
+### 8.2 Linear Bode phase
 
 ![Linear Bode phase](plots/02_linear_bode_phase.png)
 
-**What to read:** phase lag quantifies delay between frequency deviation and delivered hydropower response.
+The phase plot shows dynamic delay. Larger phase lag means mechanical-power support arrives later relative to the frequency event. In a later closed-loop grid model this becomes directly relevant to damping and robustness.
 
-**Interpretation:** increasing phase lag means the turbine response arrives later relative to the grid-frequency disturbance. This is important because prequalification is not only an MW-capacity problem; timing matters.
-
-### 7.3 Nyquist trajectory
+### 8.3 Nyquist trajectory
 
 ![Linear Nyquist](plots/03_linear_nyquist.png)
 
-**What to read:** the Nyquist trajectory is a compact frequency-domain representation of gain and phase together.
+The Nyquist curve combines gain and phase in one plane. In this first notebook it is a diagnostic of the local linear model. With a full plant-grid loop it can be upgraded to explicit stability-margin analysis.
 
-**Interpretation:** in this notebook it is primarily a screening diagnostic. When a more complete closed-loop grid/plant model is added, the trajectory can be used for explicit robustness and stability-margin assessment.
-
-### 7.4 JuMP optimized linear response
+### 8.4 JuMP optimized linear response
 
 ![JuMP linear response](plots/04_jump_linear_response.png)
 
-**What to read:** the solid curve is the predicted incremental power and the dashed level is the reserve offered by JuMP.
+The reduced model reaches roughly **5.01 MW at 5 s** while JuMP declares an offered reserve of **2.70 MW**. The candidate itself is limited by guide-vane rate. The over-delivery reveals that the present reduced formulation is conservative in `P_FCR` but loose in delivered-power tracking.
 
-**Interpretation:** the optimized candidate should meet the dynamic-delivery constraint without violating plant constraints. For the present proxy case, the reserve is expected to be limited mainly by guide-vane opening rate rather than available gate travel or flow capacity.
+This is the main formulation issue to improve in the next notebook revision.
 
-### 7.5 Optimized guide-vane trajectory
+### 8.5 Optimized guide-vane trajectory
 
 ![Optimized gate](plots/05_jump_gate.png)
 
-**What to read:** this is the actuator motion required to provide the optimized reserve.
+The guide vane moves from about `0.5385 pu` to about `0.5745 pu`. The early slope approaches the `0.12 pu/s` opening-rate bound, confirming that the actuator rate is the active capability constraint.
 
-**Interpretation:** a trajectory touching the rate limit means that the actuator, not the turbine MW rating, is the binding capability. This result is operationally useful because it tells the engineer what should be improved or retuned if more FCR is desired.
+Operational interpretation: more FCR in this proxy case would require either more permissible gate rate, different governor tuning, or a less demanding response requirement.
 
-### 7.6 Nonlinear HPD power verification
+### 8.6 Nonlinear HPD power verification
 
 ![Nonlinear power](plots/06_nonlinear_power_verification.png)
 
-**What to read:** nonlinear turbine power is compared with the JuMP reserve offer.
+The nonlinear plant delivers about **5.64 MW at 5 s**, above both the required 90% threshold and the 2.70 MW candidate offer. The candidate therefore passes the present minimum-delivery check.
 
-**Interpretation:** if the nonlinear power response reaches the required fraction within the required time and remains physically well behaved, the linear candidate survives the first physics-based validation. If not, the offer should be reduced or the controller/screening model revised.
+However, because the nonlinear plant also over-delivers, this plot reinforces the need for upper acceptance envelopes in a realistic prequalification implementation.
 
-### 7.7 Nonlinear guide-vane response
+### 8.7 Nonlinear guide-vane response
 
 ![Nonlinear gate](plots/07_nonlinear_gate.png)
 
-**What to read:** this plot verifies that the governor trajectory produced by the actual nonlinear simulation remains inside gate and gate-rate limits.
+The nonlinear maximum gate is **0.57448 pu**, nearly identical to the reduced-model endpoint. The maximum gate rate is **0.11609 pu/s**, below the `0.12 pu/s` proxy limit.
 
-**Interpretation:** disagreement with the optimized linear gate trajectory indicates that the reduced model is missing important nonlinear or hydraulic interactions.
+This is one of the strongest agreements between the cheap screening model and the nonlinear HPD replay.
 
-### 7.8 Nonlinear turbine flow
+### 8.8 Nonlinear turbine flow
 
 ![Nonlinear flow](plots/08_nonlinear_flow.png)
 
-**What to read:** this is the hydraulic cost of the frequency response in terms of turbine discharge.
+The maximum turbine flow is only **1.06653 pu of Q0**, comfortably inside the proxy upper bound of `1.45 pu`. Hydraulic flow is therefore not the limiting constraint in this case.
 
-**Interpretation:** FCR feasibility is not only a generator-power question. Excessive flow excursion can become the real constraint even if the generator has sufficient MW headroom.
+The ranking of limits is approximately
 
-### 7.9 Linear screening versus nonlinear physics
+```text
+guide-vane rate  -> active / near-active
+flow limit       -> inactive
+gate travel      -> inactive
+minimum delivery -> satisfied
+```
+
+### 8.9 Linear screening versus nonlinear physics
 
 ![Linear versus nonlinear](plots/09_linear_vs_nonlinear.png)
 
-This is the central result of the study.
+This is the central plot of the study.
 
-**Interpretation:**
+At 5 s,
 
-- close agreement means the reduced model is suitable for cheap reserve screening near this operating point;
-- moderate mismatch means a safety factor or model correction may be enough;
-- large mismatch means the linear candidate should not be used directly and the workflow should return `REDUCE / RETUNE`;
-- repeated mismatch across operating points is evidence that the screening model itself should be upgraded.
+$$
+\Delta P_{lin}\approx5.0141\ \mathrm{MW},
+$$
 
-The purpose is therefore not to force the nonlinear plant to agree with the optimizer. The purpose is to use the nonlinear plant to determine when the cheap optimizer can be trusted.
+while
+
+$$
+\Delta P_{NL}\approx5.6372\ \mathrm{MW}.
+$$
+
+The difference is
+
+$$
+\Delta P_{NL}-\Delta P_{lin}
+\approx0.6231\ \mathrm{MW},
+$$
+
+or about **12.4% of the linear 5 s prediction**.
+
+This is a moderate model mismatch rather than a catastrophic disagreement. The reduced model captures the actuator trajectory well, but it underestimates nonlinear mechanical-power delivery. For screening, this may be acceptable with a safety factor; for actual prequalification, the acceptance envelopes should be evaluated on the nonlinear model.
 
 ---
 
-## 8. Why JuMP helps the prequalification workflow
+## 9. Engineering conclusion
 
-A conventional workflow can involve repeated manual tests:
+For the present proxy FCR study,
+
+$$
+\boxed{P_{\mathrm{FCR}}^*=2.7000\ \mathrm{MW}}
+$$
+
+with
+
+$$
+\boxed{R^*=5.56\%}
+$$
+
+passes the nonlinear HydroPowerDynamics.jl verification.
+
+The important finding is not simply the 2.7 MW number. The workflow also identifies **why** that number is limited:
+
+$$
+\boxed{\text{guide-vane opening rate is the active screening constraint}}
+$$
+
+while gate travel and hydraulic-flow bounds remain inactive.
+
+The nonlinear plant delivers more power than the reduced model predicts, so the current screening model is useful but not yet a complete qualification surrogate.
+
+---
+
+## 10. Why JuMP helps
+
+A manual workflow is often
 
 ```text
-choose droop -> simulate -> inspect -> change droop -> simulate again -> inspect again
+choose droop -> simulate -> inspect -> change droop -> repeat
 ```
 
-The proposed workflow changes this to
+This notebook changes the workflow to
 
 ```text
 plant limits + test definition
           |
           v
-JuMP searches maximum candidate reserve
+JuMP finds a candidate reserve
           |
           v
-one nonlinear verification layer
+nonlinear HPD verification
           |
           v
 PASS / REDUCE / RETUNE + limiting constraint
 ```
 
-The benefit is not that JuMP replaces the physical qualification test. The benefit is that it reduces the search space before expensive/high-fidelity testing and explains **why** the capability is limited.
-
-This can make prequalification preparation less repetitive and potentially cheaper, especially when many operating points, hydro units or controller settings must be screened.
+The value of JuMP is therefore not to replace physical qualification. It reduces repeated manual search and exposes the active constraint before expensive/high-fidelity testing.
 
 ---
 
-## 9. Generated artifacts
-
-After a successful CI run the study contains
+## 11. Generated artifacts
 
 ```text
 quick_examples/fcr_prequalification_study/
@@ -487,21 +516,11 @@ quick_examples/fcr_prequalification_study/
     └── fcr_validation_trajectory.csv
 ```
 
-The summary CSV records
-
-- optimized reserve,
-- optimized droop,
-- linear 5 s delivery,
-- nonlinear 5 s delivery,
-- nonlinear final delivery,
-- maximum gate,
-- maximum normalized flow,
-- maximum guide-vane rate,
-- final decision.
+The executed notebook, plots and CSVs are generated automatically by GitHub Actions and committed back to the `FCR_study` branch.
 
 ---
 
-## 10. Reproduce locally
+## 12. Reproduce locally
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
@@ -514,20 +533,25 @@ jupyter nbconvert --to notebook --execute --inplace \
 
 ---
 
-## 11. Next step toward actual FCR prequalification
+## 13. Next formulation improvements
 
-Keep the physics/optimization architecture fixed and replace the proxy test configuration with the applicable FCR-N/FCR-D requirements. Then repeat the workflow across several operating points:
+The next version should make the optimization closer to an actual prequalification evaluator by adding:
+
+1. a lower **and upper** dynamic acceptance envelope;
+2. exact product-specific FCR-N/FCR-D test trajectories;
+3. multiple operating points `(P0,H,Q0)`;
+4. asymmetric upward/downward reserve limits;
+5. gate deadband, saturation and rate asymmetry;
+6. optional surge-tank and elastic-waterway variants;
+7. closed-loop grid interaction rather than only a prescribed frequency boundary;
+8. a robust margin between the linear candidate and nonlinear verified capability.
+
+Across operating points, the long-term target is a capability map
 
 $$
-(P_0,H,Q_0)^{(1)},
-(P_0,H,Q_0)^{(2)},\ldots,(P_0,H,Q_0)^{(n)}.
-$$
-
-This produces a capability surface rather than one number,
-
-$$
-P_{\mathrm{FCR,max}} =
+P_{\mathrm{FCR,max}}
+=
 \Phi(P_0,H,Q_0,\theta_{gov},\theta_{hyd}).
 $$
 
-That capability map is the more useful long-term result: it can support automatic prequalification preparation, controller tuning and a Freki-type decision-support layer around HydroPowerDynamics.jl.
+That map can support automatic screening, controller tuning and a Freki-type decision-support layer around HydroPowerDynamics.jl.
