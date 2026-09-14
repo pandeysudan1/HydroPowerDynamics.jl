@@ -4,8 +4,8 @@
 #
 # Same plant, same governor, same 75 -> 90 MW load step at t = 5 s.
 # The ONLY topology change is the surge-tank branch at the headrace/penstock
-# junction.  A preconditioning interval (-300...0 s) is used so both systems
-# are at their nonlinear hydraulic/control equilibrium before the visible test.
+# junction. A preconditioning interval (-300...0 s) is used so both systems
+# reach their nonlinear hydraulic/control operating point before the visible test.
 # =============================================================================
 
 using HydroPowerDynamics
@@ -33,39 +33,38 @@ const C_ETA      = 0.25
 const TAU_RATED  = 0.90
 const KQ         = Q_RATED / (TAU_RATED * D_RUNNER^2 * sqrt(H_GROSS))
 
-# Gate that gives 75 MW for the nominal-head affinity curve.  The dynamic
-# network will make a small correction during the -300...0 s conditioning run.
+# Gate/flow estimate giving ~75 MW at nominal head before pipe losses.
 const TAU0       = 0.5384797177203611
 const Q0         = 22.13749950628151
 const DM0        = RHO * Q0
 
-# Match the earlier Trollheim AGC study approximately: H ~= 1.83 s.
+# Match the earlier Trollheim AGC benchmark approximately: H ~= 1.83 s.
 const H_INERTIA  = 1.83
 const JTOTAL     = 2H_INERTIA * PBASE / W0^2
 
-# Conservative hydro governor/AGC tuning from the OpenHPL forensic study.
-# GGOV1 uses physical droop coefficient R_droop [rad s / W].
+# Conservative hydro governor/AGC tuning carried from the OpenHPL study.
+# GGOV1Governor uses R_droop in physical units [rad s / W].
 const R_PU       = 0.50
 const R_DROOP    = R_PU * W0 / PBASE
 const TP         = 0.05
 const TGOV       = 0.30
-const KI         = 0.10 / PBASE           # scale W error to a moderate gate integrator
+const KI         = 0.10 / PBASE
 
-# Hydraulic geometry (same in both cases)
+# Same hydraulic geometry in both cases.
 const L_HEADRACE = 500.0
 const D_HEADRACE = 6.0
 const L_PENSTOCK = 500.0
 const D_PENSTOCK = 4.0
 const ROUGHNESS  = 1.5e-5
 
-# Surge-tank benchmark geometry
+# Surge branch geometry.
 const ATANK      = π/4 * 3.4^2
 const ZSURGE0    = 69.97
 const D_RISER    = 3.4
 const L_RISER    = 87.0
 const E_RISER    = 1.0e-2
 
-"""Build one Trollheim hydropower system.  `with_surge=true` adds only the surge branch."""
+"""Build one Trollheim plant. `with_surge=true` adds only the surge branch."""
 function build_trollheim(; with_surge::Bool)
     @named upper = Reservoir(H=H_GROSS, rho=RHO, g=G, p_atm=101325.0)
     @named tail  = Reservoir(H=0.0,     rho=RHO, g=G, p_atm=101325.0)
@@ -106,19 +105,19 @@ function build_trollheim(; with_surge::Bool)
 
     surge = nothing
     if with_surge
-        @named surge = SurgeTank(A_t=ATANK, Z_0=ZSURGE0,
-                                 D_riser=D_RISER, L_riser=L_RISER,
-                                 e_riser=E_RISER, rho=RHO, g=G,
-                                 p_atm=101325.0)
+        @named surge_comp = SurgeTank(A_t=ATANK, Z_0=ZSURGE0,
+                                      D_riser=D_RISER, L_riser=L_RISER,
+                                      e_riser=E_RISER, rho=RHO, g=G,
+                                      p_atm=101325.0)
+        surge = surge_comp
         push!(systems, surge)
-        # Acausal three-way junction: headrace outlet, penstock inlet, surge branch.
-        # Replace the two-way headrace->penstock equation by the 3-port connect.
+        # Replace the ordinary two-port junction by a three-way acausal node.
         deleteat!(eqs, 2)
         insert!(eqs, 2, connect(headrace.port_b, penstock.port_a, surge.port))
     end
 
-    name = with_surge ? :TrollheimWithSurge : :TrollheimNoSurge
-    raw = ODESystem(eqs, t; name=name, systems=systems)
+    model_name = with_surge ? :TrollheimWithSurge : :TrollheimNoSurge
+    raw = ODESystem(eqs, t; name=model_name, systems=systems)
     sys = structural_simplify(raw)
     return (; sys, raw, upper, tail, headrace, penstock, turbine, rotor,
             generator, speed, pshaft, governor, surge)
@@ -126,28 +125,29 @@ end
 
 function simulate_case(; with_surge::Bool)
     m = build_trollheim(with_surge=with_surge)
-    sys = m.sys
 
-    # Explicit starts are guesses; the -300...0 s conditioning interval removes
-    # their influence before the visible disturbance study.
+    # Starts are deliberately treated as guesses; the hidden -300...0 s interval
+    # is the operating-point conditioner.
     u0 = Dict(
-        m.headrace.dm => DM0,
-        m.penstock.dm => DM0,
-        m.rotor.omega => W0,
-        m.governor.pow_lag.x => P0,
-        m.governor.gov_lag.x => 0.0,
-        m.governor.gate_int.x => TAU0,
+        m.headrace.dm       => DM0,
+        m.penstock.dm       => DM0,
+        m.rotor.omega       => W0,
+        m.governor.P_meas   => P0,
+        m.governor.x_gov    => 0.0,
+        m.governor.x_int    => TAU0,
     )
     if with_surge
         u0[m.surge.Z] = ZSURGE0
     end
 
     p0 = Dict(m.generator.P_rated => P0)
-    prob = ODEProblem(sys, merge(u0, p0), (-300.0, 65.0))
+    prob = ODEProblem(m.sys, merge(u0, p0), (-300.0, 65.0))
 
-    load_step = PresetTimeCallback([TSTEP]) do integ
-        integ.ps[m.generator.P_rated] = P1
-    end
+    load_step = DiscreteCallback(
+        (u, tt, integrator) -> tt == TSTEP,
+        integrator -> (integrator.ps[m.generator.P_rated] = P1; nothing),
+        save_positions=(true, true),
+    )
 
     sol = solve(prob, Rodas5P(); callback=load_step, tstops=[TSTEP],
                 abstol=1e-8, reltol=1e-8, saveat=0.01)
@@ -155,18 +155,18 @@ function simulate_case(; with_surge::Bool)
 end
 
 function metrics(m, sol)
-    tv = sol.t
+    tv    = sol.t
     omega = sol[m.rotor.omega]
-    freq = omega ./ W0 .* F0
-    pm = sol[m.turbine.P_mech] ./ 1e6
-    gate = sol[m.governor.tau_o]
-    q = sol[m.turbine.Q]
+    freq  = omega ./ W0 .* F0
+    pm    = sol[m.turbine.P_mech] ./ 1e6
+    gate  = sol[m.governor.tau_o]
+    q     = sol[m.turbine.Q]
 
-    vis = findall(>=(0.0), tv)
+    pre  = findall(tt -> 0.0 <= tt < TSTEP, tv)
     post = findall(>=(TSTEP), tv)
-    nadir_local = argmin(freq[post])
-    i_nadir = post[nadir_local]
+    i_nadir = post[argmin(freq[post])]
 
+    # Integral of absolute frequency error after the disturbance.
     e = abs.(freq .- F0)
     iae = 0.0
     for k in 2:length(tv)
@@ -176,7 +176,7 @@ function metrics(m, sol)
         end
     end
 
-    # settling: first time after step after which |f-f0| <= 0.05 Hz
+    # First instant after which frequency remains within ±0.05 Hz.
     settle = NaN
     for i in post
         if all(abs.(freq[i:end] .- F0) .<= 0.05)
@@ -188,9 +188,9 @@ function metrics(m, sol)
     out = (
         t=tv, f=freq, pm=pm, gate=gate, q=q,
         nadir=freq[i_nadir], t_nadir=tv[i_nadir],
-        final_f=freq[end], final_pm=pm[end],
-        iae=iae, settling=settle,
-        pre_f_range=maximum(freq[vis[tv[vis] .< TSTEP]]) - minimum(freq[vis[tv[vis] .< TSTEP]]),
+        final_f=freq[end], final_pm=pm[end], iae=iae, settling=settle,
+        pre_f_range=maximum(freq[pre]) - minimum(freq[pre]),
+        pre_pm_range=maximum(pm[pre]) - minimum(pm[pre]),
     )
     if m.surge !== nothing
         return merge(out, (Z=sol[m.surge.Z], Qs=sol[m.surge.port.dm] ./ RHO))
@@ -199,7 +199,7 @@ function metrics(m, sol)
 end
 
 println("\n=== HydroPowerDynamics.jl: Trollheim AGC / surge-tank comparison ===")
-@printf "Pload: %.1f -> %.1f MW at t=%.1f s\n" P0/1e6 P1/1e6 TSTEP
+@printf "Load: %.1f -> %.1f MW at t=%.1f s\n" P0/1e6 P1/1e6 TSTEP
 @printf "Initial gate estimate = %.6f pu; initial Q estimate = %.3f m3/s\n" TAU0 Q0
 @printf "Equivalent inertia H = %.2f s; J = %.3e kg m2\n\n" H_INERTIA JTOTAL
 
@@ -210,18 +210,18 @@ println("Solving WITH surge tank...")
 m1, sol1 = simulate_case(with_surge=true)
 r1 = metrics(m1, sol1)
 
-@printf "%-24s %14s %14s\n" "Metric" "No surge" "With surge"
-@printf "%-24s %14.5f %14.5f\n" "Nadir [Hz]" r0.nadir r1.nadir
-@printf "%-24s %14.3f %14.3f\n" "Nadir time [s]" r0.t_nadir r1.t_nadir
-@printf "%-24s %14.5f %14.5f\n" "f(65) [Hz]" r0.final_f r1.final_f
-@printf "%-24s %14.4f %14.4f\n" "Pm(65) [MW]" r0.final_pm r1.final_pm
-@printf "%-24s %14.5f %14.5f\n" "IAE [Hz s]" r0.iae r1.iae
-@printf "%-24s %14.3f %14.3f\n" "Settling [s]" r0.settling r1.settling
+@printf "%-25s %14s %14s\n" "Metric" "No surge" "With surge"
+@printf "%-25s %14.6f %14.6f\n" "Pre f range [Hz]" r0.pre_f_range r1.pre_f_range
+@printf "%-25s %14.6f %14.6f\n" "Pre Pm range [MW]" r0.pre_pm_range r1.pre_pm_range
+@printf "%-25s %14.5f %14.5f\n" "Nadir [Hz]" r0.nadir r1.nadir
+@printf "%-25s %14.3f %14.3f\n" "Nadir time [s]" r0.t_nadir r1.t_nadir
+@printf "%-25s %14.5f %14.5f\n" "f(65) [Hz]" r0.final_f r1.final_f
+@printf "%-25s %14.4f %14.4f\n" "Pm(65) [MW]" r0.final_pm r1.final_pm
+@printf "%-25s %14.5f %14.5f\n" "IAE [Hz s]" r0.iae r1.iae
+@printf "%-25s %14.3f %14.3f\n" "Settling [s]" r0.settling r1.settling
 @printf "\nNadir improvement with surge tank = %.5f Hz\n" (r1.nadir-r0.nadir)
 
 mkpath(joinpath(@__DIR__, "plots"))
-
-# Visible interval only
 mask0 = r0.t .>= 0
 mask1 = r1.t .>= 0
 
