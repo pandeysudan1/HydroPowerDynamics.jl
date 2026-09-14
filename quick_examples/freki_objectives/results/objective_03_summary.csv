@@ -1,0 +1,8 @@
+quantity,value
+baseline_robust_MW,9.75
+best_intervention,lower_operating_gate
+best_screening_capacity_MW,16.7
+increase_MW,6.949999999999999
+increase_pct,71.28205128205127
+post_intervention_constraint,gate headroom
+formal_qualification_state,NOT ESTABLISHED

@@ -1,0 +1,7 @@
+case,description,capacity_MW,gain_MW,gain_pct,static_headroom_MW,active_constraint
+lower_operating_gate,Pre-position unit at gate 0.88 pu before upward reserve service,16.7,6.949999999999999,71.28205128205127,15.877522091056207,gate headroom
+gate_travel_extension,Increase usable upper gate from 1.00 -> 1.03 pu equivalent,13.6,3.8499999999999996,39.48717948717948,12.946749905319422,gate headroom
+nominal_head,Operate at nominal measured head instead of 2% low-head case,9.95,0.1999999999999993,2.051282051282044,9.483837028637154,gate headroom
+faster_servo,Reduce effective governor/servo time constant 0.50 -> 0.30 s,9.75,0.0,0.0,9.302319334149587,gate headroom
+higher_gate_rate,Increase permitted guide-vane rate 0.12 -> 0.18 pu/s,9.75,0.0,0.0,9.302319334149587,gate headroom
+better_turbine_gain,Remove conservative -1.5% turbine-gain derating,9.75,0.0,0.0,9.288173675703163,gate headroom
