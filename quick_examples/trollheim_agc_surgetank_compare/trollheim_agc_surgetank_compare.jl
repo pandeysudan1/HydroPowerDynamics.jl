@@ -18,7 +18,8 @@ const W0 = 2π * RPM0 / 60
 const H_GROSS = 371.0
 const RHO = 1000.0
 const G = 9.81
-const P_UP = 101325.0 + RHO * G * H_GROSS
+const P_ATM = 101325.0
+const P_UP = P_ATM + RHO * G * H_GROSS
 const Q_RATED = 37.0
 const D_RUNNER = 2.5
 const ETA_MAX = 0.97
@@ -44,9 +45,23 @@ const D_RISER = 3.4
 const L_RISER = 87.0
 const E_RISER = 1e-2
 
+function pipe_operating_guesses(L, Dpipe)
+    A = π * Dpipe^2 / 4
+    mu = 1e-3
+    Re = DM0 * Dpipe / (mu * A)
+    fD = 1.0 / (2.0 * log10(ROUGHNESS / (3.7 * Dpipe) + 5.7 / Re^0.9))^2
+    dpf = fD * (L / Dpipe) * (DM0 / (RHO * A))^2 * RHO / 2
+    (; Re, fD, dpf)
+end
+
+const HRG = pipe_operating_guesses(L_HEADRACE, D_HEADRACE)
+const PNG = pipe_operating_guesses(L_PENSTOCK, D_PENSTOCK)
+const ETA0 = ETA_MAX * (1 - C_ETA * (Q0 / Q_RATED - 1)^2)
+const TAU_SHAFT0 = P0 / W0
+
 function build_trollheim(; with_surge::Bool)
-    @named upper = Reservoir(H=H_GROSS, rho=RHO, g=G, p_atm=101325.0)
-    @named tail = Reservoir(H=0.0, rho=RHO, g=G, p_atm=101325.0)
+    @named upper = Reservoir(H=H_GROSS, rho=RHO, g=G, p_atm=P_ATM)
+    @named tail = Reservoir(H=0.0, rho=RHO, g=G, p_atm=P_ATM)
     @named headrace = Penstock(L=L_HEADRACE, D_pipe=D_HEADRACE, rho=RHO, B=2e9, e=ROUGHNESS)
     @named penstock = Penstock(L=L_PENSTOCK, D_pipe=D_PENSTOCK, rho=RHO, B=2e9, e=ROUGHNESS)
     @named turbine = FrancisTurbineAffinity(D=D_RUNNER, K_q=KQ, eta_max=ETA_MAX, c_eta=C_ETA,
@@ -73,7 +88,7 @@ function build_trollheim(; with_surge::Bool)
     surge = nothing
     if with_surge
         @named surge_comp = SurgeTank(A_t=ATANK, Z_0=ZSURGE0, D_riser=D_RISER, L_riser=L_RISER,
-                                      e_riser=E_RISER, rho=RHO, g=G, p_atm=101325.0)
+                                      e_riser=E_RISER, rho=RHO, g=G, p_atm=P_ATM)
         surge = surge_comp
         push!(systems, surge)
         deleteat!(eqs, 2)
@@ -86,29 +101,59 @@ function build_trollheim(; with_surge::Bool)
     (; sys, raw, headrace, penstock, turbine, rotor, generator, governor, surge)
 end
 
-function simulate_case(; with_surge::Bool)
-    m = build_trollheim(with_surge=with_surge)
-    u0 = Dict(
+function make_guesses(m; with_surge::Bool)
+    g = Dict(
         m.headrace.dm => DM0,
         m.headrace.p_avg => P_UP,
+        m.headrace.Re => HRG.Re,
+        m.headrace.f_D => HRG.fD,
+        m.headrace.dp_f => HRG.dpf,
         m.penstock.dm => DM0,
         m.penstock.p_avg => P_UP,
+        m.penstock.Re => PNG.Re,
+        m.penstock.f_D => PNG.fD,
+        m.penstock.dp_f => PNG.dpf,
+        m.turbine.H => H_GROSS,
+        m.turbine.Q => Q0,
+        m.turbine.eta => ETA0,
+        m.turbine.P_mech => P0,
+        m.turbine.dm => DM0,
+        m.turbine.tau_shaft => TAU_SHAFT0,
         m.rotor.omega => W0,
         m.rotor.theta => 0.0,
         m.governor.xi => 0.0,
         m.governor.gate => TAU0,
     )
-    with_surge && (u0[m.surge.Z] = ZSURGE0)
+    with_surge && (g[m.surge.Z] = ZSURGE0)
+    g
+end
 
-    guesses = Dict(
-        m.turbine.H => H_GROSS,
-        m.turbine.Q => Q0,
-        m.turbine.P_mech => P0,
-    )
+function simulate_case(; with_surge::Bool)
+    m = build_trollheim(with_surge=with_surge)
 
-    # Hidden conditioner interval: same 75 MW operating condition from -300 to 5 s.
-    # At t=5 s the generator/load equation changes to 90 MW; AGC sees only speed error.
-    prob = ODEProblem(m.sys, u0, (-300.0, 65.0); guesses)
+    # Important: these are operating-point guesses, not hard initial constraints.
+    # Let MTK solve a consistent nonlinear initialization point.
+    u0 = Dict{Any,Any}()
+    guesses = make_guesses(m; with_surge=with_surge)
+
+    println("  building initialization problem with operating-point guesses only")
+    try
+        iprob = ModelingToolkit.InitializationProblem(m.sys, -300.0, u0; guesses=guesses)
+        @printf("  initialization unknowns=%d\n", length(iprob.u0))
+    catch err
+        println("  initialization diagnostic construction failed: ", sprint(showerror, err))
+    end
+
+    prob = ODEProblem(m.sys, u0, (-300.0, 65.0); guesses=guesses)
+    try
+        if isdefined(ModelingToolkit, :analyze_initialization_jacobian)
+            diag = ModelingToolkit.analyze_initialization_jacobian(prob)
+            println("  initialization Jacobian diagnostic: ", diag)
+        end
+    catch err
+        println("  initialization Jacobian diagnostic failed: ", sprint(showerror, err))
+    end
+
     sol = solve(prob, Rodas5P(); tstops=[TSTEP], abstol=1e-8, reltol=1e-8, saveat=0.01)
 
     t_end = isempty(sol.t) ? -Inf : sol.t[end]
