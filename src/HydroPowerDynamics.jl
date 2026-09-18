@@ -52,6 +52,6 @@ export RotorInertia, SimpleGenerator, VariableLoadGenerator, RotationalSpeedSens
 export PIDGovernor, GGOV1Governor, SimpleGovernorAGC
 export gross_head, net_head, darcy_head_loss, power_cascade, joukowsky_pressure, wave_speed
 export critical_closure_time, unit_speed, unit_discharge, plant_efficiency, hydraulic_efficiency
-export darcy_factor, swamee_jain
+export darcy_factor, swamee_jain, model_structure_report
 
 end # module HydroPowerDynamics
