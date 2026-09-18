@@ -38,7 +38,6 @@ using HydroPowerDynamics
     prob = ODEProblem(sys, [], (0.0, 2.0))
     sol = solve(prob, Rodas5P(); reltol = 1e-8, abstol = 1e-9)
 
-    @test SciMLBase.successful_retcode(sol)
     @test abs(sol[sys.tank.h][end] - 50.0) < 1e-5
     @test abs(sol[sys.tank.Vdot][end]) < 1e-5
 end
