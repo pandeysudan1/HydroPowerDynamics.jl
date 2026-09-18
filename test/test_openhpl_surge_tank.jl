@@ -20,7 +20,7 @@ using HydroPowerDynamics
         end
     end
 
-    @mtkbuild sys begin
+    @mtkcompile sys begin
         boundary = HydrostaticBoundary()
         tank = OpenHPLSurgeTank(
             H = 87.0,
@@ -35,7 +35,12 @@ using HydroPowerDynamics
         end
     end
 
-    prob = ODEProblem(sys, [], (0.0, 2.0))
+    u0 = [
+        sys.tank.h => 50.0,
+        sys.tank.Vdot => 0.0,
+    ]
+
+    prob = ODEProblem(sys, u0, (0.0, 2.0))
     sol = solve(prob, Rodas5P(); reltol = 1e-8, abstol = 1e-9)
 
     @test abs(sol[sys.tank.h][end] - 50.0) < 1e-5
