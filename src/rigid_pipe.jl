@@ -54,19 +54,21 @@ Positive dm is defined from port_a to port_b.
     end
 
     @equations begin
+        # 1. MOMENTUM BALANCE
+        D(dm) ~ (A / L) * (dp_drive - dp_f)
+
+        # 2. ALGEBRAIC / CONSTITUTIVE RELATIONS
         A ~ pi * D_pipe^2 / 4
         Q ~ dm / rho
         v ~ Q / A
-
-        port_a.dm + port_b.dm ~ 0
-        port_a.dm ~ dm
-
         Re ~ abs(dm) * D_pipe / (mu * A)
         f_D ~ darcy_factor(Re, D_pipe, roughness)
         dp_f ~ f_D * (L / D_pipe) * (rho / 2) * v * abs(v)
         h_f ~ dp_f / (rho * g)
-
         dp_drive ~ port_a.p - port_b.p + rho * g * (port_a.z - port_b.z)
-        D(dm) ~ (A / L) * (dp_drive - dp_f)
+
+        # 3. CONNECTION EQUATIONS
+        port_a.dm + port_b.dm ~ 0
+        port_a.dm ~ dm
     end
 end
