@@ -63,6 +63,7 @@ using HydroPowerDynamics
     end
 
     report = model_structure_report(sys)
+    println("TurbineLookup structural report: ", report)
     @test report.equations == report.unknowns
     @test report.balanced
     @test report.parameters > 0
