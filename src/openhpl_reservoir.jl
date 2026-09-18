@@ -108,20 +108,19 @@ variant after the basic waterway chain is validated.
     end
 
     @equations begin
-        # Geometry from OpenHPL/Waterway/Reservoir.mo
+        # 1. MASS BALANCE
+        # Connector flow is positive INTO the reservoir.
+        D(m) ~ port.dm
+
+        # 2. ALGEBRAIC / CONSTITUTIVE RELATIONS
         A ~ h * (W + h * tan(alpha))
         V ~ A * L
         m ~ rho * V
-
-        # Elevation and hydrostatic outlet pressure
-        port.z ~ z_out
         h_abs ~ z_out + h
-        port.p ~ p_atm + rho * g * h
-
-        # Positive Q_out means water leaving the reservoir.
         Q_out ~ -port.dm / rho
 
-        # Storage balance. Connector flow is positive INTO component.
-        D(m) ~ port.dm
+        # 3. CONNECTION EQUATIONS
+        port.z ~ z_out
+        port.p ~ p_atm + rho * g * h
     end
 end
