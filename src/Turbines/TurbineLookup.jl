@@ -118,7 +118,7 @@ replace Q11 and eta entries with measured or manufacturer hill-chart data.
         q11_22 = 0.190
         q11_23 = 0.184
         q11_31 = 0.300
-        q11_32 = 0.307407127
+        q11_32 = 0.30735108593749
         q11_33 = 0.298
 
         # Efficiency table: rows = gate, columns = n11
