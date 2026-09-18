@@ -29,6 +29,7 @@ include("utils.jl")
 include("connectors.jl")
 include("hydraulic.jl")
 include("openhpl_reservoir.jl")
+include("rigid_pipe.jl")
 include("openhpl_surge_tank.jl")
 include("turbine.jl")
 include("mechanical.jl")
@@ -41,7 +42,7 @@ export TranslationalPort, MechanicalTranslationalPort
 export ElectricalACPort, ElectricalPort, ACBusPort, ElectricalDQPort, ElectricalDCPort
 export SignalInPort, SignalOutPort
 export Reservoir, ReservoirBoundaryZ, DynamicReservoir
-export Penstock, SurgeTank, OpenHPLSurgeTank, DraftTube, GuideVane
+export RigidPipe, Penstock, SurgeTank, OpenHPLSurgeTank, DraftTube, GuideVane
 export FrancisTurbineAffinity, PeltonTurbine
 export RotorInertia, SimpleGenerator, VariableLoadGenerator, RotationalSpeedSensor, MechanicalPowerSensor
 export PIDGovernor, GGOV1Governor, SimpleGovernorAGC
