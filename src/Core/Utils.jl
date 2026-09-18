@@ -159,3 +159,32 @@ unit_discharge(Q, D, H) = Q / (D^2 * sqrt(H))
 η = P_mech / (ρ·g·Q·H).  (Eq. T.4)
 """
 hydraulic_efficiency(P_mech, rho, g, Q, H) = P_mech / (rho * g * Q * H)
+
+
+# ── Model structure / well-posedness diagnostics ─────────────────────────────
+
+"""
+    model_structure_report(sys)
+
+Return a compact structural count for a ModelingToolkit system.
+
+Fields:
+- equations   : number of equations
+- unknowns    : number of unknown variables
+- parameters  : number of parameters
+- balanced    : true when equations == unknowns
+
+This is a bookkeeping diagnostic, not a substitute for successful
+structural compilation and initialization.
+"""
+function model_structure_report(sys)
+    neq = length(equations(sys))
+    nunk = length(unknowns(sys))
+    npar = length(parameters(sys))
+    return (
+        equations = neq,
+        unknowns = nunk,
+        parameters = npar,
+        balanced = neq == nunk,
+    )
+end
