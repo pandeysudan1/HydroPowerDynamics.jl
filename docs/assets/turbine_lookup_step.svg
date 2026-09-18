@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="900" viewBox="0 0 1100 900">
+<rect width="1100" height="900" fill="white"/>
+<style>
+text{font-family:Arial,Helvetica,sans-serif;fill:#111}
+.axis{stroke:#333;stroke-width:1.5}
+.grid{stroke:#ddd;stroke-width:1}
+.line{fill:none;stroke:#1f77b4;stroke-width:4}
+.step{fill:none;stroke:#d62728;stroke-width:4}
+.mark{stroke:#777;stroke-width:2;stroke-dasharray:7 7}
+.lbl{font-size:22px}.small{font-size:17px}.title{font-size:30px;font-weight:700}
+</style>
+<text x="55" y="45" class="title">Trollheim-inspired TurbineLookup — gate step 0.5 → 0.7 pu at t = 5 s</text>
+<text x="55" y="75" class="small">Fixed H = 371 m, D = 2.5 m, n11 = 50. Lookup model is algebraic, so outputs jump with the gate command.</text>
+
+<!-- panel helper coordinates: x 90..1020, y spans -->
+<!-- Gate -->
+<text x="35" y="155" class="lbl">Gate [pu]</text>
+<line x1="90" y1="210" x2="1020" y2="210" class="axis"/><line x1="90" y1="115" x2="90" y2="210" class="axis"/>
+<line x1="555" y1="115" x2="555" y2="210" class="mark"/>
+<path d="M90 180 L555 180 L555 140 L1020 140" class="step"/>
+<text x="100" y="175" class="small">0.5</text><text x="980" y="135" class="small">0.7</text>
+
+<!-- Flow -->
+<text x="35" y="310" class="lbl">Q [m³/s]</text>
+<line x1="90" y1="365" x2="1020" y2="365" class="axis"/><line x1="90" y1="270" x2="90" y2="365" class="axis"/>
+<line x1="555" y1="270" x2="555" y2="365" class="mark"/>
+<path d="M90 340 L555 340 L555 292 L1020 292" class="line"/>
+<text x="100" y="335" class="small">19.02</text><text x="950" y="287" class="small">26.40</text>
+
+<!-- Efficiency -->
+<text x="35" y="465" class="lbl">η [-]</text>
+<line x1="90" y1="520" x2="1020" y2="520" class="axis"/><line x1="90" y1="425" x2="90" y2="520" class="axis"/>
+<line x1="555" y1="425" x2="555" y2="520" class="mark"/>
+<path d="M90 495 L555 495 L555 455 L1020 455" class="line"/>
+<text x="100" y="490" class="small">0.8875</text><text x="952" y="450" class="small">0.94</text>
+
+<!-- Mechanical power -->
+<text x="35" y="620" class="lbl">Pm [MW]</text>
+<line x1="90" y1="675" x2="1020" y2="675" class="axis"/><line x1="90" y1="580" x2="90" y2="675" class="axis"/>
+<line x1="555" y1="580" x2="555" y2="675" class="mark"/>
+<path d="M90 650 L555 650 L555 600 L1020 600" class="line"/>
+<text x="100" y="645" class="small">61.44</text><text x="945" y="595" class="small">90.33</text>
+
+<!-- time axis -->
+<text x="80" y="715" class="small">0 s</text><text x="540" y="715" class="small">5 s</text><text x="995" y="715" class="small">10 s</text>
+<text x="500" y="750" class="lbl">Time [s]</text>
+
+<!-- summary -->
+<rect x="90" y="780" width="930" height="80" rx="10" fill="#f5f5f5" stroke="#ccc"/>
+<text x="115" y="815" class="small">Analytical lookup checkpoints:</text>
+<text x="115" y="842" class="small">Q: 19.0206 → 26.4046 m³/s    η: 0.8875 → 0.94    Pm: 61.4378 → 90.3340 MW</text>
+</svg>
