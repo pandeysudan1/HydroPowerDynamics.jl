@@ -98,29 +98,24 @@ Air-cushion, sharp-orifice and throttle variants are intentionally deferred.
     end
 
     @equations begin
-        # Geometry
+        # 1. MASS AND MOMENTUM BALANCES
+        D(m) ~ port.dm
+        D(M) ~ port.dm * v + F_p - F_f - F_g
+
+        # 2. ALGEBRAIC / CONSTITUTIVE RELATIONS
         A ~ pi * D_tank^2 / 4
         cos_theta ~ H / L
         l ~ h / cos_theta
-
-        # Kinematics / constitutive relations
         v ~ Vdot / A
         mdot ~ rho * Vdot
         m ~ rho * A * l
         M ~ m * v
-
-        # Connector convention: positive flow enters this component.
-        port.dm ~ mdot
-
-        # Forces in the OpenHPL simple surge-shaft momentum balance.
         F_p ~ (port.p - p_atm) * A
         F_f ~ f * (l / D_tank) * (rho * A / 2) * v * abs(v)
         F_g ~ m * g * cos_theta
 
-        # Mass balance. Since m = rho*A*h/cos(theta), this also gives dh/dt.
-        D(m) ~ port.dm
-
-        # Momentum balance.
-        D(M) ~ port.dm * v + F_p - F_f - F_g
+        # 3. CONNECTION EQUATIONS
+        # Positive connector flow enters the surge tank.
+        port.dm ~ mdot
     end
 end
