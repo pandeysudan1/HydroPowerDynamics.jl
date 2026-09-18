@@ -25,16 +25,20 @@ using ModelingToolkitStandardLibrary.Blocks
 export t, D
 export Blocks
 
-include("utils.jl")
-include("connectors.jl")
-include("hydraulic.jl")
-include("openhpl_reservoir.jl")
-include("rigid_pipe.jl")
-include("openhpl_surge_tank.jl")
-include("turbine.jl")
-include("mechanical.jl")
-include("governor.jl")
-include("agc.jl")
+include("Core/Utils.jl")
+include("Interfaces/Connectors.jl")
+
+include("Waterways/LegacyHydraulic.jl")
+include("Waterways/Reservoirs/Reservoirs.jl")
+include("Waterways/RigidPipe.jl")
+include("Waterways/SurgeTank.jl")
+
+include("Turbines/LegacyTurbines.jl")
+include("Turbines/TurbineLookup.jl")
+
+include("Electromechanical/Mechanical.jl")
+include("Controls/Governors.jl")
+include("Controls/AGC.jl")
 
 export HydraulicPort, HydraulicPortZ
 export RotationalPort, MechanicalRotationalPort
@@ -43,7 +47,7 @@ export ElectricalACPort, ElectricalPort, ACBusPort, ElectricalDQPort, Electrical
 export SignalInPort, SignalOutPort
 export Reservoir, ReservoirBoundaryZ, DynamicReservoir
 export RigidPipe, Penstock, SurgeTank, OpenHPLSurgeTank, DraftTube, GuideVane
-export FrancisTurbineAffinity, PeltonTurbine
+export FrancisTurbineAffinity, PeltonTurbine, TurbineLookup, bilinear3x3_clamped
 export RotorInertia, SimpleGenerator, VariableLoadGenerator, RotationalSpeedSensor, MechanicalPowerSensor
 export PIDGovernor, GGOV1Governor, SimpleGovernorAGC
 export gross_head, net_head, darcy_head_loss, power_cascade, joukowsky_pressure, wave_speed
