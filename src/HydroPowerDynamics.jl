@@ -34,7 +34,11 @@ include("mechanical.jl")
 include("governor.jl")
 include("agc.jl")
 
-export HydraulicPort, RotationalPort, SignalInPort, SignalOutPort
+export HydraulicPort, HydraulicPortZ
+export RotationalPort, MechanicalRotationalPort
+export TranslationalPort, MechanicalTranslationalPort
+export ElectricalACPort, ElectricalPort, ACBusPort, ElectricalDQPort, ElectricalDCPort
+export SignalInPort, SignalOutPort
 export Reservoir, Penstock, SurgeTank, OpenHPLSurgeTank, DraftTube, GuideVane
 export FrancisTurbineAffinity, PeltonTurbine
 export RotorInertia, SimpleGenerator, VariableLoadGenerator, RotationalSpeedSensor, MechanicalPowerSensor
